@@ -1,0 +1,155 @@
+import { C } from "../theme";
+import { SectionCard, Field, Grid, TextInput, RadioGroup } from "../components/UI";
+
+const TX = {
+  en: {
+    title: "Consent Declaration",
+    consentEn: "I voluntarily provide the above information for welfare assessment, eligibility mapping, social support facilitation and awareness purposes.",
+    consentTe: "నేను సంక్షేమ మదింపు, అర్హత మ్యాపింగ్ మరియు సామాజిక మద్దతు సహాయం కోసం పై సమాచారాన్ని స్వచ్ఛందంగా అందిస్తున్నాను.",
+    iAgree: "I Agree – Consent Given",
+    declined: "Declined",
+    signature: "Signature / Full Name",
+    date: "Date",
+    surveyorName: "Surveyor Name",
+    surveyorId: "Surveyor ID",
+    surveyLocation: "Survey Location (Village/Town)",
+    remarks: "Additional Remarks",
+    submit: "✓ Submit Survey",
+    submitting: "Submitting...",
+    submitted: "Survey Submitted!",
+    submittedMsg: "Thank you. Your response has been recorded successfully.",
+    demoNote: "Demo mode – JSON payload that would be sent to PostgreSQL:",
+  },
+  te: {
+    title: "అంగీకార ప్రకటన",
+    consentEn: "I voluntarily provide the above information for welfare assessment, eligibility mapping, social support facilitation and awareness purposes.",
+    consentTe: "నేను సంక్షేమ మదింపు, అర్హత మ్యాపింగ్ మరియు సామాజిక మద్దతు సహాయం కోసం పై సమాచారాన్ని స్వచ్ఛందంగా అందిస్తున్నాను.",
+    iAgree: "నేను అంగీకరిస్తున్నాను",
+    declined: "తిరస్కరించారు",
+    signature: "సంతకం / పూర్తి పేరు",
+    date: "తేదీ",
+    surveyorName: "సర్వేయర్ పేరు",
+    surveyorId: "సర్వేయర్ ID",
+    surveyLocation: "సర్వే స్థలం (గ్రామం/పట్టణం)",
+    remarks: "అదనపు వ్యాఖ్యలు",
+    submit: "✓ సర్వే సమర్పించండి",
+    submitting: "సమర్పిస్తోంది...",
+    submitted: "సర్వే సమర్పించారు!",
+    submittedMsg: "ధన్యవాదాలు. మీ ప్రతిస్పందన విజయవంతంగా నమోదైంది.",
+    demoNote: "డెమో మోడ్ – PostgreSQL కి పంపబడే JSON:",
+  },
+};
+
+export default function SectionK({ data, onChange, lang, allData, submitting, submitted, submitError, onSubmit }) {
+  const t = TX[lang];
+  const up = (f, v) => onChange(f, v);
+
+  if (submitted) {
+    return (
+      <SectionCard icon="✅" title={t.title}>
+        <div style={{ textAlign:"center", padding:"48px 0" }}>
+          <div style={{ fontSize:56, marginBottom:16 }}>🎉</div>
+          <h3 style={{ color:C.green, fontSize:22, fontWeight:800, margin:"0 0 10px" }}>{t.submitted}</h3>
+          <p style={{ color:C.textMuted, fontSize:14, margin:0 }}>{t.submittedMsg}</p>
+        </div>
+      </SectionCard>
+    );
+  }
+
+  return (
+    <SectionCard icon="✅" title={t.title}>
+      {/* Bilingual consent box */}
+      <div style={{
+        padding:"20px 22px",
+        background:"rgba(251,191,36,0.05)",
+        border:`1px solid rgba(251,191,36,0.2)`,
+        borderRadius:10,
+        lineHeight:1.7,
+      }}>
+        <p style={{ margin:"0 0 12px", fontSize:13, color:C.text }}>
+          <strong style={{ color:C.accent }}>English: </strong>{t.consentEn}
+        </p>
+        <p style={{ margin:0, fontSize:13, color:C.text }}>
+          <strong style={{ color:C.accent }}>తెలుగు: </strong>{t.consentTe}
+        </p>
+      </div>
+
+      {/* Agree / Declined */}
+      <RadioGroup
+        field="consentStatus"
+        value={data.consentStatus}
+        options={[["AGREED", t.iAgree], ["DECLINED", t.declined]]}
+        onChange={up}
+      />
+
+      {/* Surveyor fields */}
+      <Grid cols={3}>
+        <Field label={t.signature} required>
+          <TextInput value={data.signatureName||""} onChange={v=>up("signatureName",v)}/>
+        </Field>
+        <Field label={t.date} required>
+          <TextInput value={data.consentDate||""} onChange={v=>up("consentDate",v)} type="date"/>
+        </Field>
+        <Field label={t.surveyorName} required>
+          <TextInput value={data.surveyorName||""} onChange={v=>up("surveyorName",v)}/>
+        </Field>
+      </Grid>
+
+      <Grid cols={2}>
+        <Field label={t.surveyorId} required>
+          <TextInput value={data.surveyorId||""} onChange={v=>up("surveyorId",v)}/>
+        </Field>
+        <Field label={t.surveyLocation} required>
+          <TextInput value={data.surveyLocation||""} onChange={v=>up("surveyLocation",v)}/>
+        </Field>
+      </Grid>
+
+      <Field label={t.remarks} optional>
+        <textarea
+          value={data.additionalRemarks||""}
+          onChange={e=>up("additionalRemarks",e.target.value)}
+          rows={4}
+          style={{
+            background:"rgba(255,255,255,0.05)", border:`1px solid ${C.border}`,
+            borderRadius:8, padding:"10px 14px", color:C.text, fontSize:13,
+            outline:"none", width:"100%", boxSizing:"border-box",
+            fontFamily:"inherit", resize:"vertical",
+          }}
+        />
+      </Field>
+
+      {/* Submit button */}
+      <div style={{ display:"flex", justifyContent:"flex-end" }}>
+        <button
+          onClick={onSubmit}
+          disabled={submitting || data.consentStatus !== "AGREED"}
+          style={{
+            padding:"14px 40px", borderRadius:10, border:"none",
+            background: submitting || data.consentStatus !== "AGREED"
+              ? "rgba(251,191,36,0.2)"
+              : "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+            color: submitting || data.consentStatus !== "AGREED" ? C.textMuted : "#0e1117",
+            cursor: submitting || data.consentStatus !== "AGREED" ? "not-allowed" : "pointer",
+            fontWeight:800, fontSize:15, fontFamily:"inherit",
+            transition:"all 0.2s",
+            boxShadow: data.consentStatus === "AGREED" && !submitting ? "0 4px 20px rgba(251,191,36,0.35)" : "none",
+          }}
+        >
+          {submitting ? t.submitting : t.submit}
+        </button>
+      </div>
+
+      {/* Demo JSON output */}
+      {submitError && (
+        <div>
+          <p style={{ color:C.accent, fontSize:11, margin:"0 0 6px" }}>{t.demoNote}</p>
+          <pre style={{
+            background:"rgba(0,0,0,0.4)", border:`1px solid rgba(251,191,36,0.15)`,
+            borderRadius:8, padding:14, fontSize:11, color:"#86efac",
+            overflowX:"auto", maxHeight:280, margin:0,
+          }}>{submitError}</pre>
+        </div>
+      )}
+    </SectionCard>
+  );
+}
