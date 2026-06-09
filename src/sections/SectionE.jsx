@@ -32,16 +32,18 @@ const TX = {
 
 const AMENITY_KEYS = ["electricity","drinkingWater","toilet","lpgGas","internet"];
 
-function AmenityBox({ label, fieldKey, value, onChange, yes, no }) {
+function AmenityBox({ label, fieldKey, value, onChange, yes, no, error }) {
   return (
     <div style={{
-      border: `1px solid ${C.border}`,
+      border: `1px solid ${error ? C.red : C.border}`,
       borderRadius: 10,
       padding: "14px 16px",
       background: "rgba(255,255,255,0.02)",
       display: "flex", flexDirection: "column", gap: 10,
     }}>
-      <span style={{ fontSize: 12, fontWeight: 700, color: C.textLabel }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: error ? C.red : C.textLabel }}>
+        {label} <span style={{ color: C.red }}>*</span>
+      </span>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {[["YES", yes], ["NO", no]].map(([v, l]) => {
           const active = value === v;
@@ -49,23 +51,24 @@ function AmenityBox({ label, fieldKey, value, onChange, yes, no }) {
             <button key={v} onClick={() => onChange(fieldKey, v)} style={{
               display: "flex", alignItems: "center", gap: 7,
               padding: "5px 10px", borderRadius: 20,
-              border: `1px solid ${active ? C.accent : "rgba(255,255,255,0.1)"}`,
-              background: active ? C.accentDim : "transparent",
-              color: active ? C.accent : C.textMuted,
+              border: `1px solid ${active ? (error ? C.red : C.accent) : "rgba(255,255,255,0.1)"}`,
+              background: active ? (error ? "rgba(248,113,113,0.12)" : C.accentDim) : "transparent",
+              color: active ? (error ? C.red : C.accent) : C.textMuted,
               cursor: "pointer", fontSize: 12, fontWeight: active ? 700 : 400,
               fontFamily: "inherit",
             }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", border: `2px solid ${active ? C.accent : "#475569"}`, background: active ? C.accent : "transparent", flexShrink: 0 }} />
+              <span style={{ width: 8, height: 8, borderRadius: "50%", border: `2px solid ${active ? (error ? C.red : C.accent) : "#475569"}`, background: active ? (error ? C.red : C.accent) : "transparent", flexShrink: 0 }} />
               {l}
             </button>
           );
         })}
       </div>
+      {error && <span style={{ color: C.red, fontSize: 10, fontWeight: 500 }}>{error}</span>}
     </div>
   );
 }
 
-export default function SectionE({ data, onChange, lang }) {
+export default function SectionE({ data, onChange, lang, errors = {}, showErrors }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
 
@@ -75,12 +78,12 @@ export default function SectionE({ data, onChange, lang }) {
     <SectionCard icon="🏠" title={t.title}>
       {/* Housing type + ownership */}
       <Grid cols={2} gap={40}>
-        <Field label={t.housingType} required>
+        <Field label={t.housingType} required error={showErrors ? errors.housingType : undefined}>
           <RadioGroup field="housingType" value={data.housingType}
             options={[["KUTCHA",t.kutcha],["SEMI_PUCCA",t.semiPucca],["PUCCA",t.pucca]]}
             onChange={up} />
         </Field>
-        <Field label={t.ownership} required>
+        <Field label={t.ownership} required error={showErrors ? errors.housingOwnership : undefined}>
           <RadioGroup field="housingOwnership" value={data.housingOwnership}
             options={[["OWN",t.own],["RENTED",t.rented],["ENCROACHED",t.encroached],["GOVT_ALLOTTED",t.govtAllotted]]}
             onChange={up} />
@@ -99,6 +102,7 @@ export default function SectionE({ data, onChange, lang }) {
               value={data[`amenity_${key}`]}
               onChange={up}
               yes={t.yes} no={t.no}
+              error={showErrors ? errors[`amenity_${key}`] : undefined}
             />
           ))}
         </div>
@@ -108,33 +112,30 @@ export default function SectionE({ data, onChange, lang }) {
       <div>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", color: C.textLabel, textTransform: "uppercase", marginBottom: 12 }}>{t.assets}</div>
         <Grid cols={3} gap={20}>
-          <Field label={t.agriLand}>
-            <input
+          <Field label={t.agriLand} required error={showErrors ? errors.agriLand : undefined}>
+            <TextInput
               value={data.agriLand || ""}
-              onChange={e => up("agriLand", e.target.value)}
+              onChange={v => up("agriLand", v)}
               placeholder="e.g. 2 acres / No"
-              style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", color:C.text, fontSize:13, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }}
+              error={!!errors.agriLand && showErrors}
             />
           </Field>
-          <Field label={t.livestock}>
-            <input
+          <Field label={t.livestock} required error={showErrors ? errors.livestock : undefined}>
+            <TextInput
               value={data.livestock || ""}
-              onChange={e => up("livestock", e.target.value)}
+              onChange={v => up("livestock", v)}
               placeholder="e.g. 2 cows"
-              style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", color:C.text, fontSize:13, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }}
+              error={!!errors.livestock && showErrors}
             />
           </Field>
-          <Field label={t.twoWheelers}>
-            <input value={data.twoWheelers || "0"} type="number" min="0" onChange={e => up("twoWheelers", e.target.value)}
-              style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", color:C.text, fontSize:13, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} />
+          <Field label={t.twoWheelers} required error={showErrors ? errors.twoWheelers : undefined}>
+            <TextInput value={data.twoWheelers || "0"} type="number" min="0" onChange={v => up("twoWheelers", v)} error={!!errors.twoWheelers && showErrors} />
           </Field>
-          <Field label={t.fourWheelers}>
-            <input value={data.fourWheelers || "0"} type="number" min="0" onChange={e => up("fourWheelers", e.target.value)}
-              style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", color:C.text, fontSize:13, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} />
+          <Field label={t.fourWheelers} required error={showErrors ? errors.fourWheelers : undefined}>
+            <TextInput value={data.fourWheelers || "0"} type="number" min="0" onChange={v => up("fourWheelers", v)} error={!!errors.fourWheelers && showErrors} />
           </Field>
-          <Field label={t.smartphones}>
-            <input value={data.smartphones || "0"} type="number" min="0" onChange={e => up("smartphones", e.target.value)}
-              style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", color:C.text, fontSize:13, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} />
+          <Field label={t.smartphones} required error={showErrors ? errors.smartphones : undefined}>
+            <TextInput value={data.smartphones || "0"} type="number" min="0" onChange={v => up("smartphones", v)} error={!!errors.smartphones && showErrors} />
           </Field>
         </Grid>
       </div>

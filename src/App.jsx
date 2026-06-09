@@ -59,25 +59,555 @@ const INIT = {
   consentStatus:"", signatureName:"", consentDate:"", surveyorName:"", surveyorId:"", surveyLocation:"", additionalRemarks:"",
 };
 
+// ── Validation logic ──────────────────────────────────
+const isUppercaseStart = (str) => !/^[a-z]/.test((str || "").trim());
+const isPhone = (str) => /^\d{10}$/.test((str || "").trim());
+const isAadhaar = (str) => /^\d{12}$/.test((str || "").trim());
+const isPincode = (str) => /^\d{6}$/.test((str || "").trim());const isValidName = (str) => /^[a-zA-Z\s]+$/.test((str || "").trim()); // Only letters and spaces
+function validateSection(section, data) {
+  const errors = {};
+  
+  if (section === "A") {
+    if (!data.firstName || !data.firstName.trim()) {
+      errors.firstName = "First Name is required";
+    } else if (!isUppercaseStart(data.firstName)) {
+      errors.firstName = "Must start with an uppercase letter";
+    }
+
+    if (data.middleName && data.middleName.trim() && !isUppercaseStart(data.middleName)) {
+      errors.middleName = "Must start with an uppercase letter";
+    }
+
+    if (!data.lastName || !data.lastName.trim()) {
+      errors.lastName = "Last Name is required";
+    } else if (!isUppercaseStart(data.lastName)) {
+      errors.lastName = "Must start with an uppercase letter";
+    }
+
+    if (!data.primaryMobile || !data.primaryMobile.trim()) {
+      errors.primaryMobile = "Primary Mobile is required";
+    } else if (!isPhone(data.primaryMobile)) {
+      errors.primaryMobile = "Must be exactly 10 digits";
+    }
+
+    if (data.alternateMobile && data.alternateMobile.trim() && !isPhone(data.alternateMobile)) {
+      errors.alternateMobile = "Must be exactly 10 digits";
+    }
+
+    if (!data.dob || !data.dob.trim()) {
+      errors.dob = "Date of Birth is required";
+    }
+
+    if (!data.gender || !data.gender.trim()) {
+      errors.gender = "Gender is required";
+    }
+
+    if (!data.maritalStatus || !data.maritalStatus.trim()) {
+      errors.maritalStatus = "Marital Status is required";
+    }
+
+    if (!data.religion || !data.religion.trim()) {
+      errors.religion = "Religion is required";
+    }
+
+    if (!data.socialCategory || !data.socialCategory.trim()) {
+      errors.socialCategory = "Social Category is required";
+    }
+
+    if (data.aadhaarConsent === "PROVIDED") {
+      if (!data.aadhaarNumber || !data.aadhaarNumber.trim()) {
+        errors.aadhaarNumber = "Aadhaar Number is required when consent is provided";
+      } else if (!isAadhaar(data.aadhaarNumber)) {
+        errors.aadhaarNumber = "Must be exactly 12 digits";
+      }
+    }
+
+    if (!data.residentialStatus || !data.residentialStatus.trim()) {
+      errors.residentialStatus = "Residential Status is required";
+    }
+
+    if (!data.village || !data.village.trim()) {
+      errors.village = "Village / Town is required";
+    }
+
+    if (!data.district || !data.district.trim()) {
+      errors.district = "District is required";
+    }
+
+    if (!data.state || !data.state.trim()) {
+      errors.state = "State is required";
+    }
+
+    if (data.pincode && data.pincode.trim() && !isPincode(data.pincode)) {
+      errors.pincode = "Must be exactly 6 digits";
+    }
+  }
+
+  if (section === "B") {
+    const adults = Number(data.adults || 0);
+    const children = Number(data.childrenCount || 0);
+    const seniors = Number(data.seniors || 0);
+
+    if (data.adults === "" || isNaN(adults) || adults < 0) {
+      errors.adults = "Must be a non-negative number";
+    }
+    if (data.childrenCount === "" || isNaN(children) || children < 0) {
+      errors.childrenCount = "Must be a non-negative number";
+    }
+    if (data.seniors === "" || isNaN(seniors) || seniors < 0) {
+      errors.seniors = "Must be a non-negative number";
+    }
+    if (!data.familyStructure || !data.familyStructure.trim()) {
+      errors.familyStructure = "Family Structure is required";
+    }
+    
+    // Require at least one family member entry with detailed warning
+    if (!data.familyMembers || data.familyMembers.length === 0) {
+      const expectedTotal = adults + children + seniors;
+      errors.familyMembers = expectedTotal > 0 
+        ? `At least one family member is required. You specified ${expectedTotal} member(s) in the counts above (${adults} adults, ${children} children, ${seniors} seniors).`
+        : "At least one family member is required";
+    }
+
+    // Validate family member count matches sum of age groups
+    if (data.familyMembers && data.familyMembers.length > 0) {
+      const expectedTotal = adults + children + seniors;
+      if (data.familyMembers.length !== expectedTotal && expectedTotal > 0) {
+        errors.familyMembers = `Family member details (${data.familyMembers.length}) must match total count from age groups (${expectedTotal}: ${adults} adults + ${children} children + ${seniors} seniors)`;
+      }
+
+      // Validate each member's details and age group alignment
+      data.familyMembers.forEach((m, idx) => {
+        if (!m.name || !m.name.trim()) {
+          errors[`member_${idx}_name`] = "Name is required";
+        } else if (!isUppercaseStart(m.name)) {
+          errors[`member_${idx}_name`] = "Must start with uppercase";
+        } else if (!isValidName(m.name)) {
+          errors[`member_${idx}_name`] = "Name can only contain letters and spaces";
+        }
+        if (!m.relation || !m.relation.trim()) {
+          errors[`member_${idx}_relation`] = "Relation is required";
+        }
+        if (m.age === "" || isNaN(m.age) || Number(m.age) < 0) {
+          errors[`member_${idx}_age`] = "Age is required (>= 0)";
+        } else {
+          // Age group validation
+          const age = Number(m.age);
+          const isAdult = age >= 18 && age < 60;
+          const isChild = age < 18;
+          const isSenior = age >= 60;
+          
+          // Track if member falls into expected age group
+          let ageGroupError = null;
+          if (isChild && children > 0) {
+            // Child is in correct group
+          } else if (isAdult && adults > 0) {
+            // Adult is in correct group
+          } else if (isSenior && seniors > 0) {
+            // Senior is in correct group
+          } else if (isChild && children === 0) {
+            ageGroupError = `Child (age ${age}) detected but no children count specified`;
+          } else if (isAdult && adults === 0) {
+            ageGroupError = `Adult (age ${age}) detected but no adults count specified`;
+          } else if (isSenior && seniors === 0) {
+            ageGroupError = `Senior (age ${age}) detected but no seniors count specified`;
+          }
+          
+          if (ageGroupError) {
+            errors[`member_${idx}_age`] = ageGroupError;
+          }
+        }
+        if (!m.gender || m.gender === "--" || m.gender === "") {
+          errors[`member_${idx}_gender`] = "Gender is required";
+        }
+        if (!m.education || !m.education.trim()) {
+          errors[`member_${idx}_education`] = "Education is required";
+        }
+        if (!m.employment || !m.employment.trim()) {
+          errors[`member_${idx}_employment`] = "Employment is required";
+        }
+        if (m.income === "" || isNaN(m.income) || Number(m.income) < 0) {
+          errors[`member_${idx}_income`] = "Income is required (>= 0)";
+        }
+      });
+    }
+  }
+
+  if (section === "C") {
+    if (!data.mainOccupation || !data.mainOccupation.trim()) {
+      errors.mainOccupation = "Main Occupation is required";
+    }
+    if (!data.employmentNature || !data.employmentNature.trim()) {
+      errors.employmentNature = "Employment Nature is required";
+    }
+  }
+
+  if (section === "D") {
+    if (!data.monthlyIncomeRange || !data.monthlyIncomeRange.trim()) {
+      errors.monthlyIncomeRange = "Monthly Income Range is required";
+    }
+    if (data.annualIncome === "" || isNaN(data.annualIncome) || Number(data.annualIncome) < 0) {
+      errors.annualIncome = "Annual Income is required and must be non-negative";
+    }
+    if (!data.bankAccount || !data.bankAccount.trim()) {
+      errors.bankAccount = "Bank Account status is required";
+    }
+    if (data.bankAccount === "YES") {
+      if (!data.liquidSavings || !data.liquidSavings.trim()) {
+        errors.liquidSavings = "Liquid savings field is required when bank account exists";
+      }
+    }
+
+    const debt = data.householdDebt || {};
+    const debtKeys = ["bank", "microfinance", "moneyLender", "friendsRelatives"];
+    let hasDebt = false;
+    debtKeys.forEach(k => {
+      const amt = Number(debt[k]?.amount || 0);
+      if (amt > 0) hasDebt = true;
+    });
+
+    if (hasDebt) {
+      if (!data.debtReasons || data.debtReasons.length === 0) {
+        errors.debtReasons = "Main reason for debt is required when debt exists";
+      }
+    }
+  }
+
+  if (section === "E") {
+    if (!data.housingType || !data.housingType.trim()) {
+      errors.housingType = "Housing Type is required";
+    }
+    if (!data.housingOwnership || !data.housingOwnership.trim()) {
+      errors.housingOwnership = "Housing Ownership is required";
+    }
+    
+    const AMENITY_KEYS = ["electricity", "drinkingWater", "toilet", "lpgGas", "internet"];
+    AMENITY_KEYS.forEach(k => {
+      const val = data[`amenity_${k}`];
+      if (!val || (val !== "YES" && val !== "NO")) {
+        errors[`amenity_${k}`] = "This amenity field is required";
+      }
+    });
+
+    if (!data.agriLand || !data.agriLand.trim()) {
+      errors.agriLand = "Agri Land is required";
+    }
+    if (!data.livestock || !data.livestock.trim()) {
+      errors.livestock = "Livestock is required";
+    }
+    if (data.twoWheelers === "" || isNaN(data.twoWheelers) || Number(data.twoWheelers) < 0) {
+      errors.twoWheelers = "Two wheelers count is required (>= 0)";
+    }
+    if (data.fourWheelers === "" || isNaN(data.fourWheelers) || Number(data.fourWheelers) < 0) {
+      errors.fourWheelers = "Four wheelers count is required (>= 0)";
+    }
+    if (data.smartphones === "" || isNaN(data.smartphones) || Number(data.smartphones) < 0) {
+      errors.smartphones = "Smartphones count is required (>= 0)";
+    }
+  }
+
+  if (section === "F") {
+    let hasDropout = false;
+    const expectedMembers = Number(data.adults || 0) + Number(data.childrenCount || 0) + Number(data.seniors || 0);
+    const eduCount = data.eduMembers ? data.eduMembers.length : 0;
+
+    if (expectedMembers > 0 && eduCount !== expectedMembers) {
+      errors.eduMembers = `Education details must be provided for all ${expectedMembers} family member(s).`;
+    }
+
+    if (data.eduMembers && data.eduMembers.length > 0) {
+      data.eduMembers.forEach((r, idx) => {
+        if (!r.name || !r.name.trim()) {
+          errors[`eduMember_${idx}_name`] = "Name is required";
+        } else if (!isUppercaseStart(r.name)) {
+          errors[`eduMember_${idx}_name`] = "Must start with uppercase";
+        }
+        if (r.status !== "Never Enrolled") {
+          if (!r.qualification || !r.qualification.trim()) {
+            errors[`eduMember_${idx}_qualification`] = "Qualification is required";
+          }
+        }
+        if (!r.status || !r.status.trim()) {
+          errors[`eduMember_${idx}_status`] = "Status is required";
+        } else if (r.status === "Dropout") {
+          hasDropout = true;
+        }
+      });
+    }
+
+    if (hasDropout) {
+      if (!data.dropoutReasons || data.dropoutReasons.length === 0) {
+        errors.dropoutReasons = "Dropout reasons are required when there is a dropout";
+      }
+    }
+  }
+
+  if (section === "G") {
+    if (!data.healthcareAccess || data.healthcareAccess.length === 0) {
+      errors.healthcareAccess = "Healthcare Access is required";
+    }
+    if (!data.healthChallenges || data.healthChallenges.length === 0) {
+      errors.healthChallenges = "Health Challenges is required";
+    }
+
+    if (data.chronicConditions && data.chronicConditions.length > 0) {
+      data.chronicConditions.forEach((c, idx) => {
+        if (!c.name || !c.name.trim()) {
+          errors[`chronic_${idx}_name`] = "Name is required";
+        } else if (!isUppercaseStart(c.name)) {
+          errors[`chronic_${idx}_name`] = "Must start with uppercase";
+        }
+        if (!c.condition || !c.condition.trim()) {
+          errors[`chronic_${idx}_condition`] = "Condition is required";
+        }
+        if (!c.duration || !c.duration.trim()) {
+          errors[`chronic_${idx}_duration`] = "Duration is required";
+        }
+        if (!c.treatment || !c.treatment.trim()) {
+          errors[`chronic_${idx}_treatment`] = "Treatment is required";
+        }
+        if (c.treatment !== "None") {
+          if (c.monthly === "" || isNaN(c.monthly) || Number(c.monthly) < 0) {
+            errors[`chronic_${idx}_monthly`] = "Monthly cost is required (>= 0)";
+          }
+        }
+      });
+    }
+
+    if (data.disabilities && data.disabilities.length > 0) {
+      data.disabilities.forEach((d, idx) => {
+        if (!d.name || !d.name.trim()) {
+          errors[`disability_${idx}_name`] = "Name is required";
+        } else if (!isUppercaseStart(d.name)) {
+          errors[`disability_${idx}_name`] = "Must start with uppercase";
+        }
+        if (!d.type || !d.type.trim()) {
+          errors[`disability_${idx}_type`] = "Disability type is required";
+        }
+        if (d.percent === "" || isNaN(d.percent) || Number(d.percent) < 0 || Number(d.percent) > 100) {
+          errors[`disability_${idx}_percent`] = "Percent is required (0-100)";
+        }
+        if (!d.certificate || !d.certificate.trim()) {
+          errors[`disability_${idx}_cert`] = "Certificate status is required";
+        }
+      });
+    }
+  }
+
+  if (section === "H") {
+    if (data.currentSchemes && data.currentSchemes.length > 0) {
+      data.currentSchemes.forEach((s, idx) => {
+        if (!s.name || !s.name.trim()) {
+          errors[`scheme_${idx}_name`] = "Scheme name is required";
+        }
+        if (!s.beneficiary || !s.beneficiary.trim()) {
+          errors[`scheme_${idx}_beneficiary`] = "Beneficiary is required";
+        }
+        if (!s.type || !s.type.trim()) {
+          errors[`scheme_${idx}_type`] = "Type is required";
+        }
+        if (!s.amount || !s.amount.trim()) {
+          errors[`scheme_${idx}_amount`] = "Amount/Freq is required";
+        }
+      });
+    }
+  }
+
+  if (section === "I") {
+    const docsList = ["aadhaar", "pan", "rationCard", "incomeCert", "casteCert", "disabilityCert", "voterId", "bankPassbook"];
+    docsList.forEach(k => {
+      const avail = data[`doc_${k}_available`];
+      if (!avail || (avail !== "YES" && avail !== "NO")) {
+        errors[`doc_${k}_available`] = "Availability is required";
+      }
+      const valid = data[`doc_${k}_valid`];
+      if (avail === "YES" && (!valid || (valid !== "YES" && valid !== "NO"))) {
+        errors[`doc_${k}_valid`] = "Validity is required";
+      }
+    });
+
+    if (!data.hasSmartphone || !data.hasSmartphone.trim()) {
+      errors.hasSmartphone = "Smartphone selection is required";
+    }
+
+    if (data.hasSmartphone === "YES") {
+      if (!data.digitalAbility || !data.digitalAbility.trim()) {
+        errors.digitalAbility = "Digital Ability is required when user has smartphone";
+      }
+    }
+  }
+
+  if (section === "J") {
+    const hasAltContact = !!((data.altContactName && data.altContactName.trim()) || (data.altMobile && data.altMobile.trim()));
+    if (hasAltContact && (!data.willingToReceiveInfo || !data.willingToReceiveInfo.trim())) {
+      errors.willingToReceiveInfo = "This selection is required";
+    }
+
+    if (data.willingToReceiveInfo === "YES") {
+      if (!data.preferredComm || data.preferredComm.length === 0) {
+        errors.preferredComm = "Preferred communication is required when willing to receive info";
+      }
+    }
+
+    if (data.altMobile && data.altMobile.trim() && !isPhone(data.altMobile)) {
+      errors.altMobile = "Must be exactly 10 digits";
+    }
+  }
+
+  if (section === "K") {
+    if (!data.consentStatus || data.consentStatus !== "AGREED") {
+      errors.consentStatus = "Consent agreement is required";
+    }
+    if (!data.signatureName || !data.signatureName.trim()) {
+      errors.signatureName = "Signature Name is required";
+    } else if (!isUppercaseStart(data.signatureName)) {
+      errors.signatureName = "Must start with an uppercase letter";
+    }
+
+    if (!data.consentDate || !data.consentDate.trim()) {
+      errors.consentDate = "Date is required";
+    }
+
+    if (!data.surveyorName || !data.surveyorName.trim()) {
+      errors.surveyorName = "Surveyor Name is required";
+    } else if (!isUppercaseStart(data.surveyorName)) {
+      errors.surveyorName = "Must start with an uppercase letter";
+    }
+
+    if (!data.surveyorId || !data.surveyorId.trim()) {
+      errors.surveyorId = "Surveyor ID is required";
+    }
+
+    if (!data.surveyLocation || !data.surveyLocation.trim()) {
+      errors.surveyLocation = "Survey Location is required";
+    }
+  }
+
+  return errors;
+}
+
 export default function App() {
   const [lang, setLang] = useState("en");
   const [current, setCurrent] = useState("A");
   const [visited, setVisited] = useState(new Set(["A"]));
   const [formData, setFormData] = useState(INIT);
+  const [showErrors, setShowErrors] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  // Auto-calc age from DOB
+  // Cleanup conditional fields when parent states change
   useEffect(() => {
-    if (formData.dob) {
-      const b = new Date(formData.dob);
-      const now = new Date();
-      let age = now.getFullYear() - b.getFullYear();
-      if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) age--;
-      if (age > 0) setFormData(f => ({ ...f, age: String(age) }));
+    // 1. Aadhaar number cleanup
+    if (formData.aadhaarConsent !== "PROVIDED" && formData.aadhaarNumber !== "") {
+      setFormData(f => ({ ...f, aadhaarNumber: "" }));
     }
-  }, [formData.dob]);
+    
+    // 2. Liquid savings cleanup
+    if (formData.bankAccount !== "YES" && formData.liquidSavings !== "") {
+      setFormData(f => ({ ...f, liquidSavings: "" }));
+    }
+    
+    // 3. Debt reasons cleanup
+    const debt = formData.householdDebt || {};
+    const debtKeys = ["bank", "microfinance", "moneyLender", "friendsRelatives"];
+    let hasDebt = false;
+    debtKeys.forEach(k => {
+      if (Number(debt[k]?.amount || 0) > 0) hasDebt = true;
+    });
+    if (!hasDebt && formData.debtReasons && formData.debtReasons.length > 0) {
+      setFormData(f => ({ ...f, debtReasons: [] }));
+    }
+
+    // 4. Dropout reasons cleanup
+    let hasDropout = false;
+    if (formData.eduMembers && formData.eduMembers.length > 0) {
+      formData.eduMembers.forEach(m => {
+        if (m.status === "Dropout") hasDropout = true;
+      });
+    }
+    if (!hasDropout && formData.dropoutReasons && formData.dropoutReasons.length > 0) {
+      setFormData(f => ({ ...f, dropoutReasons: [] }));
+    }
+
+    // 5. Digital ability cleanup
+    if (formData.hasSmartphone !== "YES" && formData.digitalAbility !== "") {
+      setFormData(f => ({ ...f, digitalAbility: "" }));
+    }
+
+    // 6. Preferred comm & Willing to receive info cleanup based on Alt Contact presence
+    const hasAltContact = !!((formData.altContactName && formData.altContactName.trim()) || (formData.altMobile && formData.altMobile.trim()));
+    if (!hasAltContact) {
+      if (formData.willingToReceiveInfo !== "NO") {
+        setFormData(f => ({ ...f, willingToReceiveInfo: "NO" }));
+      }
+    }
+    if (formData.willingToReceiveInfo !== "YES" && formData.preferredComm && formData.preferredComm.length > 0) {
+      setFormData(f => ({ ...f, preferredComm: [] }));
+    }
+
+    // 7. Document validity cleanup
+    const docsList = ["aadhaar", "pan", "rationCard", "incomeCert", "casteCert", "disabilityCert", "voterId", "bankPassbook"];
+    let docUpdates = {};
+    docsList.forEach(k => {
+      const avail = formData[`doc_${k}_available`];
+      const valid = formData[`doc_${k}_valid`];
+      if (avail !== "YES" && valid && valid !== "NO") {
+        docUpdates[`doc_${k}_valid`] = "NO";
+      }
+    });
+    if (Object.keys(docUpdates).length > 0) {
+      setFormData(f => ({ ...f, ...docUpdates }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    formData.aadhaarConsent,
+    formData.aadhaarNumber,
+    formData.bankAccount,
+    formData.liquidSavings,
+    formData.householdDebt,
+    formData.debtReasons,
+    formData.eduMembers,
+    formData.dropoutReasons,
+    formData.hasSmartphone,
+    formData.digitalAbility,
+    formData.altContactName,
+    formData.altMobile,
+    formData.willingToReceiveInfo,
+    formData.preferredComm,
+    formData.doc_aadhaar_available, formData.doc_aadhaar_valid,
+    formData.doc_pan_available, formData.doc_pan_valid,
+    formData.doc_rationCard_available, formData.doc_rationCard_valid,
+    formData.doc_incomeCert_available, formData.doc_incomeCert_valid,
+    formData.doc_casteCert_available, formData.doc_casteCert_valid,
+    formData.doc_disabilityCert_available, formData.doc_disabilityCert_valid,
+    formData.doc_voterId_available, formData.doc_voterId_valid,
+    formData.doc_bankPassbook_available, formData.doc_bankPassbook_valid
+  ]);
+
+      // Auto-calc age from DOB
+      const dob = formData.dob;
+      useEffect(() => {
+        if (dob) {
+          const b = new Date(dob);
+          const now = new Date();
+          let age = now.getFullYear() - b.getFullYear();
+          if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) age--;
+          if (age > 0) setFormData(f => ({ ...f, age: String(age) }));
+        }
+      }, [dob]);
+
+  const getFirstInvalidSection = () => {
+    for (let i = 0; i < SECTIONS.length; i++) {
+      const secKey = SECTIONS[i].key;
+      const secErrors = validateSection(secKey, formData);
+      if (Object.keys(secErrors).length > 0) {
+        return secKey;
+      }
+    }
+    return null;
+  };
+  const allSectionsValid = getFirstInvalidSection() === null;
 
   const idx = SECTIONS.findIndex(s => s.key === current);
   const progress = Math.round((idx / (SECTIONS.length - 1)) * 100);
@@ -88,6 +618,34 @@ export default function App() {
   }
 
   function goTo(key) {
+    const targetIdx = SECTIONS.findIndex(s => s.key === key);
+    const currentIdx = SECTIONS.findIndex(s => s.key === current);
+    
+    if (targetIdx > currentIdx) {
+      // Validate all sections from current up to targetIdx - 1
+      for (let i = currentIdx; i < targetIdx; i++) {
+        const secErrors = validateSection(SECTIONS[i].key, formData);
+        if (Object.keys(secErrors).length > 0) {
+          setCurrent(SECTIONS[i].key);
+          setShowErrors(true);
+          // Wait for render then scroll back to the first error
+          setTimeout(() => {
+            const firstErr = document.querySelector('[data-invalid="true"]');
+            if (firstErr) {
+              const rect = firstErr.getBoundingClientRect();
+              const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+              window.scrollTo({
+                top: rect.top + scrollTop - 160,
+                behavior: "smooth"
+              });
+            }
+          }, 50);
+          return;
+        }
+      }
+    }
+    
+    setShowErrors(false);
     setVisited(v => new Set([...v, key]));
     setCurrent(key);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -196,11 +754,20 @@ export default function App() {
           <SectionComp
             data={formData} onChange={onChange} lang={lang}
             allData={formData}
+            errors={validateSection("K", formData)}
+            showErrors={showErrors}
+            allSectionsValid={allSectionsValid}
             submitting={submitting} submitted={submitted}
             submitError={submitError} onSubmit={handleSubmit}
           />
         ) : (
-          <SectionComp data={formData} onChange={onChange} lang={lang} />
+          <SectionComp
+            data={formData}
+            onChange={onChange}
+            lang={lang}
+            errors={validateSection(current, formData)}
+            showErrors={showErrors}
+          />
         )}
 
         {/* ── NAV BUTTONS ───────────────────────────── */}

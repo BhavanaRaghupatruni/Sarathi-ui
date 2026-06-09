@@ -1,8 +1,13 @@
+import { useEffect } from "react";
 import { C } from "../theme";
 import {
-  SectionCard, Field, Grid, TextInput, RadioGroup,
-  CheckGroup, Check, TableHead, AddRowBtn, SectionLabel,
+  SectionCard, Field, Grid, TextInput, RadioGroup, AddRowBtn, sanitizeNumeric,
 } from "../components/UI";
+
+// Name validation: only letters and spaces
+function sanitizeName(val) {
+  return (val || "").replace(/[^a-zA-Z\s]/g, "");
+}
 
 const TX = {
   en: {
@@ -52,37 +57,49 @@ const COLS = [
 
 const colTemplate = COLS.map(c => c.w).join(" ");
 
-export default function SectionB({ data, onChange, lang }) {
+export default function SectionB({ data, onChange, lang, errors = {}, showErrors }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
 
-  const members = data.familyMembers || [emptyMember()];
+  const expectedMembers = Number(data.adults || 0) + Number(data.childrenCount || 0) + Number(data.seniors || 0);
+  const members = data.familyMembers || [];
+  const displayMembers = members.slice(0, expectedMembers);
+
+  useEffect(() => {
+    if (members.length > expectedMembers) {
+      up("familyMembers", members.slice(0, expectedMembers));
+    }
+  }, [expectedMembers, members.length, up]);
 
   function updateMember(idx, field, val) {
     const next = members.map((m, i) => i === idx ? { ...m, [field]: val } : m);
     up("familyMembers", next);
   }
 
-  function addMember() { up("familyMembers", [...members, emptyMember()]); }
+  function addMember() {
+    if (members.length < expectedMembers) {
+      up("familyMembers", [...members, emptyMember()]);
+    }
+  }
   function removeMember(idx) { up("familyMembers", members.filter((_, i) => i !== idx)); }
 
   return (
     <SectionCard icon="🏡" title={t.title}>
       {/* Counts */}
       <Grid cols={3}>
-        <Field label={t.adults}>
-          <TextInput value={data.adults || "0"} onChange={v => up("adults", v)} type="number" min="0" placeholder="0" />
+        <Field label={t.adults} error={showErrors ? errors.adults : undefined}>
+          <TextInput value={data.adults || "0"} onChange={v => up("adults", v)} type="number" min="0" placeholder="0" error={!!errors.adults && showErrors} />
         </Field>
-        <Field label={t.children}>
-          <TextInput value={data.childrenCount || "0"} onChange={v => up("childrenCount", v)} type="number" min="0" placeholder="0" />
+        <Field label={t.children} error={showErrors ? errors.childrenCount : undefined}>
+          <TextInput value={data.childrenCount || "0"} onChange={v => up("childrenCount", v)} type="number" min="0" placeholder="0" error={!!errors.childrenCount && showErrors} />
         </Field>
-        <Field label={t.seniors}>
-          <TextInput value={data.seniors || "0"} onChange={v => up("seniors", v)} type="number" min="0" placeholder="0" />
+        <Field label={t.seniors} error={showErrors ? errors.seniors : undefined}>
+          <TextInput value={data.seniors || "0"} onChange={v => up("seniors", v)} type="number" min="0" placeholder="0" error={!!errors.seniors && showErrors} />
         </Field>
       </Grid>
 
       {/* Family Structure */}
-      <Field label={t.familyStructure}>
+      <Field label={t.familyStructure} required error={showErrors ? errors.familyStructure : undefined}>
         <RadioGroup field="familyStructure" value={data.familyStructure}
           options={[
             ["NUCLEAR", t.nuclear], ["JOINT", t.joint],
@@ -96,7 +113,12 @@ export default function SectionB({ data, onChange, lang }) {
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", color: C.textLabel, textTransform: "uppercase", marginBottom: 10 }}>
           {t.memberDetails}
         </div>
-        <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+        {showErrors && errors.familyMembers && (
+          <div style={{ color: C.red, fontSize: 12, marginBottom: 8, padding: "10px", background: "rgba(248, 113, 113, 0.1)", borderRadius: 6, border: `1px solid ${C.red}` }}>{errors.familyMembers}</div>
+        )}
+        <div
+          data-invalid={showErrors && errors.familyMembers ? "true" : undefined}
+          style={{ border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
           {/* Header */}
           <div style={{
             display: "grid", gridTemplateColumns: colTemplate,
@@ -109,40 +131,111 @@ export default function SectionB({ data, onChange, lang }) {
           </div>
 
           {/* Rows */}
-          {members.map((m, idx) => (
-            <div key={idx} style={{
-              display: "grid", gridTemplateColumns: colTemplate,
-              padding: "8px 12px", gap: 6, alignItems: "center",
-              borderTop: `1px solid rgba(255,255,255,0.04)`,
-              background: idx % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent",
-            }}>
-              <input value={m.name} onChange={e => updateMember(idx, "name", e.target.value)} placeholder="Name"
-                style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, padding:"5px 8px", color:C.text, fontSize:12, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} />
-              <input value={m.relation} onChange={e => updateMember(idx, "relation", e.target.value)} placeholder="Relation"
-                style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, padding:"5px 8px", color:C.text, fontSize:12, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} />
-              <input value={m.age} onChange={e => updateMember(idx, "age", e.target.value)} type="number" min="0"
-                style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, padding:"5px 8px", color:C.text, fontSize:12, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} />
-              <select value={m.gender} onChange={e => updateMember(idx, "gender", e.target.value)}
-                style={{ background:C.bgInput, border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, padding:"5px 6px", color:C.text, fontSize:12, outline:"none", width:"100%", fontFamily:"inherit" }}>
-                {[["--","--"],["M","M"],["F","F"],["O","O"]].map(([v,l]) => <option key={v} value={v} style={{background:C.bgCard}}>{l}</option>)}
-              </select>
-              <input value={m.education} onChange={e => updateMember(idx, "education", e.target.value)} placeholder="Qualification"
-                style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, padding:"5px 8px", color:C.text, fontSize:12, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} />
-              <input value={m.employment} onChange={e => updateMember(idx, "employment", e.target.value)} placeholder="Occupation"
-                style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, padding:"5px 8px", color:C.text, fontSize:12, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} />
-              <input value={m.income} onChange={e => updateMember(idx, "income", e.target.value)} type="number" min="0"
-                style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, padding:"5px 8px", color:C.text, fontSize:12, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} />
-              <select value={m.disability} onChange={e => updateMember(idx, "disability", e.target.value)}
-                style={{ background:C.bgInput, border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, padding:"5px 6px", color:C.text, fontSize:12, outline:"none", width:"100%", fontFamily:"inherit" }}>
-                {[["No","No"],["Yes","Yes"]].map(([v,l]) => <option key={v} value={v} style={{background:C.bgCard}}>{l}</option>)}
-              </select>
-              <input value={m.illness} onChange={e => updateMember(idx, "illness", e.target.value)} placeholder="Condition"
-                style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:6, padding:"5px 8px", color:C.text, fontSize:12, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" }} />
-              <button onClick={() => removeMember(idx)} style={{ background:"none", border:"none", color: C.red, cursor:"pointer", fontSize:15, padding:0, lineHeight:1 }}>✕</button>
-            </div>
-          ))}
+          {displayMembers.map((m, idx) => {
+            const nameErr = errors[`member_${idx}_name`];
+            const relationErr = errors[`member_${idx}_relation`];
+            const ageErr = errors[`member_${idx}_age`];
+            const genderErr = errors[`member_${idx}_gender`];
+            const eduErr = errors[`member_${idx}_education`];
+            const empErr = errors[`member_${idx}_employment`];
+            const incErr = errors[`member_${idx}_income`];
+
+            return (
+              <div key={idx} style={{
+                display: "grid", gridTemplateColumns: colTemplate,
+                padding: "8px 12px", gap: 6, alignItems: "center",
+                borderTop: `1px solid rgba(255,255,255,0.04)`,
+                background: idx % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent",
+              }}>
+                <input value={m.name} onChange={e => updateMember(idx, "name", sanitizeName(e.target.value))} placeholder="Name"
+                  title={nameErr && showErrors ? nameErr : ""}
+                  data-invalid={nameErr && showErrors ? "true" : undefined}
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: `1px solid ${nameErr && showErrors ? C.red : "rgba(255,255,255,0.08)"}`,
+                    borderRadius: 6, padding: "5px 8px", color: C.text, fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit"
+                  }} />
+                <input value={m.relation} onChange={e => updateMember(idx, "relation", e.target.value)} placeholder="Relation"
+                  title={relationErr && showErrors ? relationErr : ""}
+                  data-invalid={relationErr && showErrors ? "true" : undefined}
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: `1px solid ${relationErr && showErrors ? C.red : "rgba(255,255,255,0.08)"}`,
+                    borderRadius: 6, padding: "5px 8px", color: C.text, fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit"
+                  }} />
+                <input value={m.age} onChange={e => updateMember(idx, "age", sanitizeNumeric(e.target.value))} type="text" inputMode="numeric" pattern="[0-9]*"
+                  title={ageErr && showErrors ? ageErr : ""}
+                  data-invalid={ageErr && showErrors ? "true" : undefined}
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: `1px solid ${ageErr && showErrors ? C.red : "rgba(255,255,255,0.08)"}`,
+                    borderRadius: 6, padding: "5px 8px", color: C.text, fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit"
+                  }} />
+                <select value={m.gender} onChange={e => updateMember(idx, "gender", e.target.value)}
+                  title={genderErr && showErrors ? genderErr : ""}
+                  data-invalid={genderErr && showErrors ? "true" : undefined}
+                  style={{
+                    background: C.bgInput,
+                    border: `1px solid ${genderErr && showErrors ? C.red : "rgba(255,255,255,0.08)"}`,
+                    borderRadius: 6, padding: "5px 6px", color: C.text, fontSize: 12, outline: "none", width: "100%", fontFamily: "inherit"
+                  }}>
+                  {[["--", "--"], ["M", "M"], ["F", "F"], ["O", "O"]].map(([v, l]) => <option key={v} value={v} style={{ background: C.bgCard }}>{l}</option>)}
+                </select>
+                
+                {/* Dropdown for Education Qualification */}
+                <select value={m.education} onChange={e => updateMember(idx, "education", e.target.value)}
+                  title={eduErr && showErrors ? eduErr : ""}
+                  data-invalid={eduErr && showErrors ? "true" : undefined}
+                  style={{
+                    background: C.bgInput,
+                    border: `1px solid ${eduErr && showErrors ? C.red : "rgba(255,255,255,0.08)"}`,
+                    borderRadius: 6, padding: "5px 6px", color: C.text, fontSize: 12, outline: "none", width: "100%", fontFamily: "inherit"
+                  }}>
+                  {[
+                    ["", "--"],
+                    ["Matriculation", "Matriculation"],
+                    ["Intermediate", "Intermediate"],
+                    ["UG", "UG"],
+                    ["PG", "PG"],
+                    ["PhD", "PhD"],
+                    ["Illiterate", "Illiterate"]
+                  ].map(([v, l]) => <option key={v} value={v} style={{ background: C.bgCard }}>{l}</option>)}
+                </select>
+
+                <input value={m.employment} onChange={e => updateMember(idx, "employment", e.target.value)} placeholder="Occupation"
+                  title={empErr && showErrors ? empErr : ""}
+                  data-invalid={empErr && showErrors ? "true" : undefined}
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: `1px solid ${empErr && showErrors ? C.red : "rgba(255,255,255,0.08)"}`,
+                    borderRadius: 6, padding: "5px 8px", color: C.text, fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit"
+                  }} />
+                <input value={m.income} onChange={e => updateMember(idx, "income", sanitizeNumeric(e.target.value))} type="text" inputMode="numeric" pattern="[0-9]*"
+                  title={incErr && showErrors ? incErr : ""}
+                  data-invalid={incErr && showErrors ? "true" : undefined}
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: `1px solid ${incErr && showErrors ? C.red : "rgba(255,255,255,0.08)"}`,
+                    borderRadius: 6, padding: "5px 8px", color: C.text, fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit"
+                  }} />
+                <select value={m.disability} onChange={e => updateMember(idx, "disability", e.target.value)}
+                  style={{ background: C.bgInput, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "5px 6px", color: C.text, fontSize: 12, outline: "none", width: "100%", fontFamily: "inherit" }}>
+                  {[["No", "No"], ["Yes", "Yes"]].map(([v, l]) => <option key={v} value={v} style={{ background: C.bgCard }}>{l}</option>)}
+                </select>
+                <input value={m.illness} onChange={e => updateMember(idx, "illness", e.target.value)} placeholder="Condition"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "5px 8px", color: C.text, fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit" }} />
+                <button onClick={() => removeMember(idx)} style={{ background: "none", border: "none", color: C.red, cursor: "pointer", fontSize: 15, padding: 0, lineHeight: 1 }}>✕</button>
+              </div>
+            );
+          })}
         </div>
-        <AddRowBtn onClick={addMember} label={t.addMember} />
+        {members.length < expectedMembers ? (
+          <AddRowBtn onClick={addMember} label={t.addMember} />
+        ) : (
+          <div style={{ marginTop: 10, fontSize: 12, color: C.textLabel }}>
+            {expectedMembers > 0 ? `Maximum ${expectedMembers} family member detail rows reached.` : "Set family member counts to add details."}
+          </div>
+        )}
       </div>
     </SectionCard>
   );

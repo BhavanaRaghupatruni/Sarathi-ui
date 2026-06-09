@@ -57,12 +57,15 @@ const TX = {
 };
 
 const emptyScheme = () => ({ name:"", beneficiary:"", type:"", amount:"" });
-const colW = "1.4fr 1.2fr 1.2fr 1.2fr 32px";
 const inputSt = { background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:6, padding:"6px 9px", color:C.text, fontSize:12, outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" };
-
-export default function SectionH({ data, onChange, lang }) {
+export default function SectionH({ data, onChange, lang, errors = {}, showErrors }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
+
+  const respondent = [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" ").trim();
+  const members = (data.familyMembers || []).map(m => m.name?.trim()).filter(Boolean);
+  const memberNames = Array.from(new Set([respondent, ...members].filter(Boolean)));
+
   const schemes = data.currentSchemes || [emptyScheme()];
 
   function updateScheme(idx, f, v) { up("currentSchemes", schemes.map((r,i)=>i===idx?{...r,[f]:v}:r)); }
@@ -85,10 +88,28 @@ export default function SectionH({ data, onChange, lang }) {
           </div>
           {schemes.map((row,idx)=>(
             <div key={idx} style={{display:"grid",gridTemplateColumns:cols.map(c=>c.w).join(" "),gap:8,padding:"8px 12px",borderTop:"1px solid rgba(255,255,255,0.04)",background:idx%2?"transparent":"rgba(255,255,255,0.01)",alignItems:"center"}}>
-              <input value={row.name} onChange={e=>updateScheme(idx,"name",e.target.value)} placeholder="Scheme name" style={inputSt}/>
-              <input value={row.beneficiary} onChange={e=>updateScheme(idx,"beneficiary",e.target.value)} placeholder="Beneficiary" style={inputSt}/>
-              <input value={row.type} onChange={e=>updateScheme(idx,"type",e.target.value)} placeholder="Type" style={inputSt}/>
-              <input value={row.amount} onChange={e=>updateScheme(idx,"amount",e.target.value)} placeholder="e.g. ₹500/month" style={inputSt}/>
+              <input value={row.name} onChange={e=>updateScheme(idx,"name",e.target.value)} placeholder="Scheme name"
+                data-invalid={errors[`scheme_${idx}_name`] && showErrors ? "true" : undefined}
+                style={{ ...inputSt, border: `1px solid ${errors[`scheme_${idx}_name`] && showErrors ? C.red : "rgba(255,255,255,0.07)"}` }}/>
+              <select value={row.beneficiary} onChange={e=>updateScheme(idx,"beneficiary",e.target.value)}
+                data-invalid={errors[`scheme_${idx}_beneficiary`] && showErrors ? "true" : undefined}
+                style={{
+                  ...inputSt,
+                  appearance: "none",
+                  cursor: "pointer",
+                  border: `1px solid ${errors[`scheme_${idx}_beneficiary`] && showErrors ? C.red : "rgba(255,255,255,0.07)"}`
+                }}>
+                <option value="" style={{background:C.bgCard}}>-- Select --</option>
+                {memberNames.map(name => (
+                  <option key={name} value={name} style={{background:C.bgCard}}>{name}</option>
+                ))}
+              </select>
+              <input value={row.type} onChange={e=>updateScheme(idx,"type",e.target.value)} placeholder="Type"
+                data-invalid={errors[`scheme_${idx}_type`] && showErrors ? "true" : undefined}
+                style={{ ...inputSt, border: `1px solid ${errors[`scheme_${idx}_type`] && showErrors ? C.red : "rgba(255,255,255,0.07)"}` }}/>
+              <input value={row.amount} onChange={e=>updateScheme(idx,"amount",e.target.value)} placeholder="e.g. ₹500/month"
+                data-invalid={errors[`scheme_${idx}_amount`] && showErrors ? "true" : undefined}
+                style={{ ...inputSt, border: `1px solid ${errors[`scheme_${idx}_amount`] && showErrors ? C.red : "rgba(255,255,255,0.07)"}` }}/>
               <button onClick={()=>removeScheme(idx)} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:15,padding:0}}>✕</button>
             </div>
           ))}

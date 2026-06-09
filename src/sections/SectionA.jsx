@@ -1,8 +1,13 @@
+import { useRef } from "react";
 import { C } from "../theme";
 import {
   SectionCard, Field, Grid, TextInput, RadioGroup,
-  SectionLabel, Radio,
 } from "../components/UI";
+
+// Name validation: only letters and spaces
+function sanitizeName(val) {
+  return (val || "").replace(/[^a-zA-Z\s]/g, "");
+}
 
 // ── Translations ────────────────────────────────────────
 const TX = {
@@ -51,35 +56,63 @@ const TX = {
   },
 };
 
-export default function SectionA({ data, onChange, lang }) {
+export default function SectionA({ data, onChange, lang, errors = {}, showErrors }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
+  const dobRef = useRef(null);
+
+  const isAadhaarRequired = data.aadhaarConsent === "PROVIDED";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* ── Respondent Identification ────────────────── */}
       <SectionCard icon="👤" title={t.respTitle}>
         <Grid cols={3}>
-          <Field label={t.firstName} required>
-            <TextInput value={data.firstName} onChange={v => up("firstName", v)} placeholder="First name" />
+          <Field label={t.firstName} required error={showErrors ? errors.firstName : undefined}>
+            <TextInput value={data.firstName} onChange={v => up("firstName", sanitizeName(v))} placeholder="First name" error={!!errors.firstName && showErrors} />
           </Field>
-          <Field label={t.middleName} optional>
-            <TextInput value={data.middleName} onChange={v => up("middleName", v)} />
+          <Field label={t.middleName} optional error={showErrors ? errors.middleName : undefined}>
+            <TextInput value={data.middleName} onChange={v => up("middleName", sanitizeName(v))} error={!!errors.middleName && showErrors} />
           </Field>
-          <Field label={t.lastName} required>
-            <TextInput value={data.lastName} onChange={v => up("lastName", v)} />
+          <Field label={t.lastName} required error={showErrors ? errors.lastName : undefined}>
+            <TextInput value={data.lastName} onChange={v => up("lastName", sanitizeName(v))} error={!!errors.lastName && showErrors} />
           </Field>
         </Grid>
 
         <Grid cols={3}>
-          <Field label={t.mobile} required>
-            <TextInput value={data.primaryMobile} onChange={v => up("primaryMobile", v)} placeholder="10-digit number" />
+          <Field label={t.mobile} required error={showErrors ? errors.primaryMobile : undefined}>
+            <TextInput value={data.primaryMobile} onChange={v => up("primaryMobile", v)} placeholder="10-digit number" error={!!errors.primaryMobile && showErrors} />
           </Field>
-          <Field label={t.altMobile} optional>
-            <TextInput value={data.alternateMobile} onChange={v => up("alternateMobile", v)} />
+          <Field label={t.altMobile} optional error={showErrors ? errors.alternateMobile : undefined}>
+            <TextInput value={data.alternateMobile} onChange={v => up("alternateMobile", v)} placeholder="10-digit number" error={!!errors.alternateMobile && showErrors} />
           </Field>
-          <Field label={t.dob} required>
-            <TextInput value={data.dob} onChange={v => up("dob", v)} type="date" />
+          <Field label={t.dob} required error={showErrors ? errors.dob : undefined}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", width: "100%" }}>
+              <TextInput inputRef={dobRef} value={data.dob} onChange={v => up("dob", v)} type="date" error={!!errors.dob && showErrors} style={{ flex: 1 }} />
+              <button
+                type="button"
+                onClick={() => dobRef.current && dobRef.current.showPicker && dobRef.current.showPicker()}
+                style={{
+                  background: "rgba(255, 255, 255, 0.05)",
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 8,
+                  padding: "10px",
+                  cursor: "pointer",
+                  fontSize: 16,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "42px",
+                  width: "42px",
+                  boxSizing: "border-box",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = C.accent}
+                onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+              >
+                📅
+              </button>
+            </div>
           </Field>
         </Grid>
 
@@ -92,31 +125,37 @@ export default function SectionA({ data, onChange, lang }) {
               options={[["PROVIDED", t.provided], ["NOT_PROVIDED", t.notProvided]]}
               onChange={up} />
           </Field>
-          <Field label={t.aadhaar} optional>
-            <TextInput value={data.aadhaarNumber} onChange={v => up("aadhaarNumber", v)} />
+          <Field label={t.aadhaar} required={isAadhaarRequired} optional={!isAadhaarRequired} error={showErrors ? errors.aadhaarNumber : undefined}>
+            <TextInput
+              value={data.aadhaarNumber}
+              onChange={v => up("aadhaarNumber", v)}
+              disabled={!isAadhaarRequired}
+              placeholder={isAadhaarRequired ? "12-digit number" : "Disabled"}
+              error={!!errors.aadhaarNumber && showErrors}
+            />
           </Field>
         </Grid>
 
-        <Field label={t.gender} required>
+        <Field label={t.gender} required error={showErrors ? errors.gender : undefined}>
           <RadioGroup field="gender" value={data.gender}
             options={[["MALE", t.male], ["FEMALE", t.female], ["TRANSGENDER", t.trans], ["OTHER", t.other]]}
             onChange={up} />
         </Field>
 
         <Grid cols={2} gap={24}>
-          <Field label={t.marital}>
+          <Field label={t.marital} required error={showErrors ? errors.maritalStatus : undefined}>
             <RadioGroup field="maritalStatus" value={data.maritalStatus}
               options={[["SINGLE", t.single], ["MARRIED", t.married], ["WIDOWED", t.widowed], ["DIVORCED", t.divorced], ["SEPARATED", t.separated]]}
               onChange={up} />
           </Field>
-          <Field label={t.religion}>
+          <Field label={t.religion} required error={showErrors ? errors.religion : undefined}>
             <RadioGroup field="religion" value={data.religion}
               options={[["HINDU", t.hindu], ["MUSLIM", t.muslim], ["CHRISTIAN", t.christian], ["SIKH", t.sikh], ["BUDDHIST", t.buddhist], ["JAIN", t.jain], ["OTHER", t.other]]}
               onChange={up} />
           </Field>
         </Grid>
 
-        <Field label={t.category} required>
+        <Field label={t.category} required error={showErrors ? errors.socialCategory : undefined}>
           <RadioGroup field="socialCategory" value={data.socialCategory}
             options={[["SC","SC"],["ST","ST"],["BC","BC"],["EWS","EWS"],["OC_GENERAL","OC / General"],["MINORITY","Minority"],["OTHER",t.other]]}
             onChange={up} />
@@ -129,7 +168,7 @@ export default function SectionA({ data, onChange, lang }) {
 
       {/* ── Address & Residency ─────────────────────── */}
       <SectionCard icon="📍" title={t.addrTitle}>
-        <Field label={t.residentialStatus} required>
+        <Field label={t.residentialStatus} required error={showErrors ? errors.residentialStatus : undefined}>
           <RadioGroup field="residentialStatus" value={data.residentialStatus}
             options={[
               ["OWN_HOUSE", t.ownHouse], ["RENTED", t.rented],
@@ -149,23 +188,23 @@ export default function SectionA({ data, onChange, lang }) {
         </Grid>
 
         <Grid cols={3}>
-          <Field label={t.village} required>
-            <TextInput value={data.village} onChange={v => up("village", v)} />
+          <Field label={t.village} required error={showErrors ? errors.village : undefined}>
+            <TextInput value={data.village} onChange={v => up("village", v)} error={!!errors.village && showErrors} />
           </Field>
           <Field label={t.mandal}>
             <TextInput value={data.mandal} onChange={v => up("mandal", v)} />
           </Field>
-          <Field label={t.district} required>
-            <TextInput value={data.district} onChange={v => up("district", v)} />
+          <Field label={t.district} required error={showErrors ? errors.district : undefined}>
+            <TextInput value={data.district} onChange={v => up("district", v)} error={!!errors.district && showErrors} />
           </Field>
         </Grid>
 
         <Grid cols={3}>
-          <Field label={t.state} required>
-            <TextInput value={data.state} onChange={v => up("state", v)} />
+          <Field label={t.state} required error={showErrors ? errors.state : undefined}>
+            <TextInput value={data.state} onChange={v => up("state", v)} error={!!errors.state && showErrors} />
           </Field>
-          <Field label={t.pincode}>
-            <TextInput value={data.pincode} onChange={v => up("pincode", v)} />
+          <Field label={t.pincode} optional error={showErrors ? errors.pincode : undefined}>
+            <TextInput value={data.pincode} onChange={v => up("pincode", v)} placeholder="6-digit pincode" error={!!errors.pincode && showErrors} />
           </Field>
         </Grid>
 

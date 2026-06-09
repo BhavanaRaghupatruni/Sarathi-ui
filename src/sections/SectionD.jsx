@@ -1,5 +1,5 @@
 import { C } from "../theme";
-import { SectionCard, Field, Grid, TextInput, RadioGroup, CheckGroup } from "../components/UI";
+import { SectionCard, Field, Grid, TextInput, RadioGroup, CheckGroup, sanitizeNumeric } from "../components/UI";
 
 const TX = {
   en: {
@@ -60,7 +60,7 @@ const debtKeys = ["bank","microfinance","moneyLender","friendsRelatives"];
 
 const colW = "140px 120px 110px 1fr 110px";
 
-export default function SectionD({ data, onChange, lang }) {
+export default function SectionD({ data, onChange, lang, errors = {}, showErrors }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
 
@@ -76,37 +76,55 @@ export default function SectionD({ data, onChange, lang }) {
     outline: "none", width: "100%", boxSizing: "border-box", fontFamily: "inherit",
   };
 
+  const isSavingsEnabled = data.bankAccount === "YES";
+  
+  let hasDebt = false;
+  debtKeys.forEach(k => {
+    if (Number(debt[k]?.amount || 0) > 0) hasDebt = true;
+  });
+
   return (
     <SectionCard icon="₹" title={t.title}>
       {/* Monthly income range */}
-      <Field label={t.monthlyIncome} required>
+      <Field label={t.monthlyIncome} required error={showErrors ? errors.monthlyIncomeRange : undefined}>
         <RadioGroup field="monthlyIncomeRange" value={data.monthlyIncomeRange} options={t.incOpts} onChange={up} />
       </Field>
 
       {/* Annual income + bank + savings */}
       <Grid cols={3} gap={24} style={{ alignItems: "start" }}>
-        <Field label={t.annualIncome}>
-          <TextInput value={data.annualIncome || "0"} onChange={v => up("annualIncome", v)} type="number" min="0" placeholder="0" />
+        <Field label={t.annualIncome} required error={showErrors ? errors.annualIncome : undefined}>
+          <TextInput value={data.annualIncome || "0"} onChange={v => up("annualIncome", v)} type="number" min="0" placeholder="0" error={!!errors.annualIncome && showErrors} />
         </Field>
-        <Field label={t.bankAccount}>
+        <Field label={t.bankAccount} required error={showErrors ? errors.bankAccount : undefined}>
           <RadioGroup field="bankAccount" value={data.bankAccount}
             options={[["YES", t.yes], ["NO", t.no]]} onChange={up} />
         </Field>
-        <Field label={t.liquidSavings}>
+        <Field label={t.liquidSavings} required={isSavingsEnabled} optional={!isSavingsEnabled} error={showErrors && isSavingsEnabled ? errors.liquidSavings : undefined}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {t.savingsOpts.map(([v, l]) => {
               const active = data.liquidSavings === v;
               return (
-                <button key={v} onClick={() => up("liquidSavings", v)} style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "8px 14px", borderRadius: 8,
-                  border: `1px solid ${active ? C.accent : "rgba(255,255,255,0.08)"}`,
-                  background: active ? C.accentDim : "rgba(255,255,255,0.02)",
-                  color: active ? C.accent : C.textMuted,
-                  cursor: "pointer", fontSize: 12, fontWeight: active ? 700 : 400,
-                  textAlign: "left", fontFamily: "inherit",
-                }}>
-                  <span style={{ width: 9, height: 9, borderRadius: "50%", border: `2px solid ${active ? C.accent : "#475569"}`, background: active ? C.accent : "transparent", flexShrink: 0 }} />
+                <button
+                  key={v}
+                  disabled={!isSavingsEnabled}
+                  onClick={() => isSavingsEnabled && up("liquidSavings", v)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "8px 14px", borderRadius: 8,
+                    border: `1px solid ${active ? C.accent : "rgba(255,255,255,0.08)"}`,
+                    background: active ? C.accentDim : "rgba(255,255,255,0.02)",
+                    color: active ? (isSavingsEnabled ? C.accent : C.textMuted) : C.textMuted,
+                    cursor: isSavingsEnabled ? "pointer" : "not-allowed",
+                    fontSize: 12, fontWeight: active ? 700 : 400,
+                    textAlign: "left", fontFamily: "inherit",
+                    opacity: isSavingsEnabled ? 1 : 0.4,
+                  }}
+                >
+                  <span style={{
+                    width: 9, height: 9, borderRadius: "50%",
+                    border: `2px solid ${active ? C.accent : "#475569"}`,
+                    background: active ? C.accent : "transparent", flexShrink: 0
+                  }} />
                   {l}
                 </button>
               );
@@ -133,18 +151,18 @@ export default function SectionD({ data, onChange, lang }) {
           {debtKeys.map((key, idx) => (
             <div key={key} style={{ display: "grid", gridTemplateColumns: colW, gap: 8, padding: "8px 12px", borderTop: "1px solid rgba(255,255,255,0.04)", background: idx % 2 ? "transparent" : "rgba(255,255,255,0.01)", alignItems: "center" }}>
               <span style={{ fontSize: 12, color: C.textLabel, fontWeight: 500 }}>{t.lenders[idx]}</span>
-              <input value={debt[key]?.amount || "0"} onChange={e => updateDebt(key, "amount", e.target.value)} type="number" min="0" style={cellStyle} />
+              <input value={debt[key]?.amount || "0"} onChange={e => updateDebt(key, "amount", sanitizeNumeric(e.target.value))} type="text" inputMode="numeric" pattern="[0-9]*" style={cellStyle} />
               <input value={debt[key]?.interest || ""} onChange={e => updateDebt(key, "interest", e.target.value)} placeholder="%" style={cellStyle} />
               <input value={debt[key]?.purpose || ""} onChange={e => updateDebt(key, "purpose", e.target.value)} style={cellStyle} />
-              <input value={debt[key]?.emi || "0"} onChange={e => updateDebt(key, "emi", e.target.value)} type="number" min="0" style={cellStyle} />
+              <input value={debt[key]?.emi || "0"} onChange={e => updateDebt(key, "emi", sanitizeNumeric(e.target.value))} type="text" inputMode="numeric" pattern="[0-9]*" style={cellStyle} />
             </div>
           ))}
         </div>
       </div>
 
       {/* Debt reason */}
-      <Field label={t.debtReason}>
-        <CheckGroup field="debtReasons" value={data.debtReasons} options={t.debtOpts} onChange={up} />
+      <Field label={t.debtReason} required={hasDebt} optional={!hasDebt} error={showErrors && hasDebt ? errors.debtReasons : undefined}>
+        <CheckGroup field="debtReasons" value={data.debtReasons} options={t.debtOpts} onChange={up} disabled={!hasDebt} />
       </Field>
     </SectionCard>
   );

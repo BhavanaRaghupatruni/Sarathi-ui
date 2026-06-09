@@ -53,15 +53,15 @@ const TX = {
   },
 };
 
-export default function SectionC({ data, onChange, lang }) {
+export default function SectionC({ data, onChange, lang, errors = {}, showErrors }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
   return (
     <SectionCard icon="💼" title={t.title}>
-      <Field label={t.mainOcc} required>
+      <Field label={t.mainOcc} required error={showErrors ? errors.mainOccupation : undefined}>
         <RadioGroup field="mainOccupation" value={data.mainOccupation} options={t.occOpts} onChange={up} />
       </Field>
-      <Field label={t.empNature}>
+      <Field label={t.empNature} required error={showErrors ? errors.employmentNature : undefined}>
         <RadioGroup field="employmentNature" value={data.employmentNature} options={t.natureOpts} onChange={up} />
       </Field>
       <Field label={t.secondary}>

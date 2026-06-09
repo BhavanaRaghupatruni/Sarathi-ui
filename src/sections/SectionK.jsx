@@ -1,5 +1,11 @@
 import { C } from "../theme";
+import { useRef } from "react";
 import { SectionCard, Field, Grid, TextInput, RadioGroup } from "../components/UI";
+
+// Name validation: only letters and spaces
+function sanitizeName(val) {
+  return (val || "").replace(/[^a-zA-Z\s]/g, "");
+}
 
 const TX = {
   en: {
@@ -40,9 +46,10 @@ const TX = {
   },
 };
 
-export default function SectionK({ data, onChange, lang, allData, submitting, submitted, submitError, onSubmit }) {
+export default function SectionK({ data, onChange, lang, allData, submitting, submitted, submitError, onSubmit, errors = {}, showErrors, allSectionsValid }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
+  const consentRef = useRef(null);
 
   if (submitted) {
     return (
@@ -75,32 +82,59 @@ export default function SectionK({ data, onChange, lang, allData, submitting, su
       </div>
 
       {/* Agree / Declined */}
-      <RadioGroup
-        field="consentStatus"
-        value={data.consentStatus}
-        options={[["AGREED", t.iAgree], ["DECLINED", t.declined]]}
-        onChange={up}
-      />
+      <Field label="" required error={showErrors ? errors.consentStatus : undefined}>
+        <RadioGroup
+          field="consentStatus"
+          value={data.consentStatus}
+          options={[["AGREED", t.iAgree], ["DECLINED", t.declined]]}
+          onChange={up}
+        />
+      </Field>
 
       {/* Surveyor fields */}
       <Grid cols={3}>
-        <Field label={t.signature} required>
-          <TextInput value={data.signatureName||""} onChange={v=>up("signatureName",v)}/>
+        <Field label={t.signature} required error={showErrors ? errors.signatureName : undefined}>
+          <TextInput value={data.signatureName||""} onChange={v=>up("signatureName",sanitizeName(v))} error={!!errors.signatureName && showErrors}/>
         </Field>
-        <Field label={t.date} required>
-          <TextInput value={data.consentDate||""} onChange={v=>up("consentDate",v)} type="date"/>
+        <Field label={t.date} required error={showErrors ? errors.consentDate : undefined}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", width: "100%" }}>
+            <TextInput inputRef={consentRef} value={data.consentDate||""} onChange={v=>up("consentDate",v)} type="date" error={!!errors.consentDate && showErrors} style={{ flex: 1 }} />
+            <button
+              type="button"
+              onClick={() => consentRef.current && consentRef.current.showPicker && consentRef.current.showPicker()}
+              style={{
+                background: "rgba(255, 255, 255, 0.05)",
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                padding: "10px",
+                cursor: "pointer",
+                fontSize: 16,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "42px",
+                width: "42px",
+                boxSizing: "border-box",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = C.accent}
+              onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+            >
+              📅
+            </button>
+          </div>
         </Field>
-        <Field label={t.surveyorName} required>
-          <TextInput value={data.surveyorName||""} onChange={v=>up("surveyorName",v)}/>
+        <Field label={t.surveyorName} required error={showErrors ? errors.surveyorName : undefined}>
+          <TextInput value={data.surveyorName||""} onChange={v=>up("surveyorName",sanitizeName(v))} error={!!errors.surveyorName && showErrors}/>
         </Field>
       </Grid>
 
       <Grid cols={2}>
-        <Field label={t.surveyorId} required>
-          <TextInput value={data.surveyorId||""} onChange={v=>up("surveyorId",v)}/>
+        <Field label={t.surveyorId} required error={showErrors ? errors.surveyorId : undefined}>
+          <TextInput value={data.surveyorId||""} onChange={v=>up("surveyorId",v)} error={!!errors.surveyorId && showErrors}/>
         </Field>
-        <Field label={t.surveyLocation} required>
-          <TextInput value={data.surveyLocation||""} onChange={v=>up("surveyLocation",v)}/>
+        <Field label={t.surveyLocation} required error={showErrors ? errors.surveyLocation : undefined}>
+          <TextInput value={data.surveyLocation||""} onChange={v=>up("surveyLocation",v)} error={!!errors.surveyLocation && showErrors}/>
         </Field>
       </Grid>
 
@@ -122,17 +156,17 @@ export default function SectionK({ data, onChange, lang, allData, submitting, su
       <div style={{ display:"flex", justifyContent:"flex-end" }}>
         <button
           onClick={onSubmit}
-          disabled={submitting || data.consentStatus !== "AGREED"}
+          disabled={submitting || data.consentStatus !== "AGREED" || !allSectionsValid}
           style={{
             padding:"14px 40px", borderRadius:10, border:"none",
-            background: submitting || data.consentStatus !== "AGREED"
+            background: submitting || data.consentStatus !== "AGREED" || !allSectionsValid
               ? "rgba(251,191,36,0.2)"
               : "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
-            color: submitting || data.consentStatus !== "AGREED" ? C.textMuted : "#0e1117",
-            cursor: submitting || data.consentStatus !== "AGREED" ? "not-allowed" : "pointer",
+            color: submitting || data.consentStatus !== "AGREED" || !allSectionsValid ? C.textMuted : "#0e1117",
+            cursor: submitting || data.consentStatus !== "AGREED" || !allSectionsValid ? "not-allowed" : "pointer",
             fontWeight:800, fontSize:15, fontFamily:"inherit",
             transition:"all 0.2s",
-            boxShadow: data.consentStatus === "AGREED" && !submitting ? "0 4px 20px rgba(251,191,36,0.35)" : "none",
+            boxShadow: data.consentStatus === "AGREED" && !submitting && allSectionsValid ? "0 4px 20px rgba(251,191,36,0.35)" : "none",
           }}
         >
           {submitting ? t.submitting : t.submit}

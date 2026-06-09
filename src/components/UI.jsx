@@ -1,24 +1,86 @@
 import { C, inputStyle, labelStyle, req, opt } from "../theme";
 
+export function sanitizeNumeric(val) {
+  let cleaned = String(val || "").replace(/\D/g, "");
+  if (cleaned.startsWith("0")) {
+    cleaned = cleaned.replace(/^0+/, "");
+    if (cleaned === "") cleaned = "0";
+  }
+  return cleaned;
+}
+
 // ── Input ────────────────────────────────────────────
-export function TextInput({ value, onChange, placeholder, type = "text", min, style }) {
+export function TextInput({ value, onChange, placeholder, type = "text", min, max, style, error, disabled, inputRef }) {
+  const borderCol = error ? C.red : (disabled ? "rgba(255,255,255,0.05)" : C.border);
+
+  const handleChange = (val) => {
+    if (type === "number") {
+      onChange(sanitizeNumeric(val));
+    } else {
+      onChange(val);
+    }
+  };
+
   return (
     <input
-      type={type} value={value} min={min}
-      onChange={e => onChange(e.target.value)}
+      ref={inputRef}
+      data-invalid={error ? "true" : undefined}
+      type={type === "number" ? "text" : type}
+      inputMode={type === "number" ? "numeric" : undefined}
+      pattern={type === "number" ? "[0-9]*" : undefined}
+      value={value} min={min} max={max}
+      onChange={e => handleChange(e.target.value)}
       placeholder={placeholder || ""}
-      style={{ ...inputStyle, ...style }}
-      onFocus={e => { e.target.style.borderColor = C.accent; e.target.style.boxShadow = `0 0 0 3px ${C.accentGlow}`; }}
-      onBlur={e => { e.target.style.borderColor = `rgba(251,191,36,0.15)`; e.target.style.boxShadow = "none"; }}
+      disabled={disabled}
+      style={{
+        ...inputStyle,
+        borderColor: borderCol,
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? "not-allowed" : "text",
+        ...style
+      }}
+      onFocus={e => {
+        if (disabled) return;
+        e.target.style.borderColor = error ? C.red : C.accent;
+        e.target.style.boxShadow = `0 0 0 3px ${error ? "rgba(248,113,113,0.25)" : C.accentGlow}`;
+      }}
+      onBlur={e => {
+        if (disabled) return;
+        e.target.style.borderColor = borderCol;
+        e.target.style.boxShadow = "none";
+      }}
     />
   );
 }
 
-export function SelectInput({ value, onChange, options, style }) {
+export function SelectInput({ value, onChange, options, style, error, disabled }) {
+  const borderCol = error ? C.red : (disabled ? "rgba(255,255,255,0.05)" : C.border);
   return (
     <select
       value={value} onChange={e => onChange(e.target.value)}
-      style={{ ...inputStyle, appearance: "none", backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center", paddingRight: 32, cursor: "pointer", ...style }}
+      disabled={disabled}
+      style={{
+        ...inputStyle,
+        appearance: "none",
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E")`,
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "right 12px center",
+        paddingRight: 32,
+        cursor: disabled ? "not-allowed" : "pointer",
+        borderColor: borderCol,
+        opacity: disabled ? 0.4 : 1,
+        ...style
+      }}
+      onFocus={e => {
+        if (disabled) return;
+        e.target.style.borderColor = error ? C.red : C.accent;
+        e.target.style.boxShadow = `0 0 0 3px ${error ? "rgba(248,113,113,0.25)" : C.accentGlow}`;
+      }}
+      onBlur={e => {
+        if (disabled) return;
+        e.target.style.borderColor = borderCol;
+        e.target.style.boxShadow = "none";
+      }}
     >
       {options.map(([v, l]) => <option key={v} value={v} style={{ background: C.bgCard }}>{l}</option>)}
     </select>
@@ -26,17 +88,23 @@ export function SelectInput({ value, onChange, options, style }) {
 }
 
 // ── Radio pill ────────────────────────────────────────
-export function Radio({ active, onClick, children }) {
+export function Radio({ active, onClick, children, disabled }) {
   return (
-    <button onClick={onClick} style={{
-      display: "flex", alignItems: "center", gap: 7,
-      padding: "7px 15px", borderRadius: 24,
-      border: `1px solid ${active ? C.accent : "rgba(255,255,255,0.1)"}`,
-      background: active ? C.accentDim : "transparent",
-      color: active ? C.accent : C.textMuted,
-      cursor: "pointer", fontSize: 12, fontWeight: active ? 700 : 400,
-      transition: "all 0.15s", userSelect: "none", fontFamily: "inherit",
-    }}>
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      style={{
+        display: "flex", alignItems: "center", gap: 7,
+        padding: "7px 15px", borderRadius: 24,
+        border: `1px solid ${active ? C.accent : "rgba(255,255,255,0.1)"}`,
+        background: active ? C.accentDim : "transparent",
+        color: active ? C.accent : C.textMuted,
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontSize: 12, fontWeight: active ? 700 : 400,
+        transition: "all 0.15s", userSelect: "none", fontFamily: "inherit",
+        opacity: disabled ? 0.4 : 1,
+      }}
+    >
       <span style={{
         width: 9, height: 9, borderRadius: "50%", flexShrink: 0,
         border: `2px solid ${active ? C.accent : "#475569"}`,
@@ -49,17 +117,23 @@ export function Radio({ active, onClick, children }) {
 }
 
 // ── Checkbox pill ─────────────────────────────────────
-export function Check({ active, onClick, children }) {
+export function Check({ active, onClick, children, disabled }) {
   return (
-    <button onClick={onClick} style={{
-      display: "flex", alignItems: "center", gap: 7,
-      padding: "7px 15px", borderRadius: 8,
-      border: `1px solid ${active ? C.green : "rgba(255,255,255,0.1)"}`,
-      background: active ? C.greenDim : "transparent",
-      color: active ? C.green : C.textMuted,
-      cursor: "pointer", fontSize: 12, fontWeight: active ? 700 : 400,
-      transition: "all 0.15s", userSelect: "none", fontFamily: "inherit",
-    }}>
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      style={{
+        display: "flex", alignItems: "center", gap: 7,
+        padding: "7px 15px", borderRadius: 8,
+        border: `1px solid ${active ? C.green : "rgba(255,255,255,0.1)"}`,
+        background: active ? C.greenDim : "transparent",
+        color: active ? C.green : C.textMuted,
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontSize: 12, fontWeight: active ? 700 : 400,
+        transition: "all 0.15s", userSelect: "none", fontFamily: "inherit",
+        opacity: disabled ? 0.4 : 1,
+      }}
+    >
       <span style={{
         width: 9, height: 9, borderRadius: 3, flexShrink: 0,
         border: `2px solid ${active ? C.green : "#475569"}`,
@@ -72,9 +146,12 @@ export function Check({ active, onClick, children }) {
 }
 
 // ── Field wrapper ─────────────────────────────────────
-export function Field({ label, required, optional: isOpt, children, style, span }) {
+export function Field({ label, required, optional: isOpt, children, style, span, error }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0, ...style, ...(span ? { gridColumn: `span ${span}` } : {}) }}>
+    <div
+      data-invalid={error ? "true" : undefined}
+      style={{ display: "flex", flexDirection: "column", gap: 0, ...style, ...(span ? { gridColumn: `span ${span}` } : {}) }}
+    >
       {label && (
         <label style={labelStyle}>
           {label}
@@ -83,31 +160,33 @@ export function Field({ label, required, optional: isOpt, children, style, span 
         </label>
       )}
       {children}
+      {error && <span style={{ color: C.red, fontSize: 11, marginTop: 4, display: "block", fontWeight: 500 }}>{error}</span>}
     </div>
   );
 }
 
 // ── Radio group ───────────────────────────────────────
-export function RadioGroup({ field, value, options, onChange }) {
+export function RadioGroup({ field, value, options, onChange, disabled }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
       {options.map(([v, l]) => (
-        <Radio key={v} active={value === v} onClick={() => onChange(field, v)}>{l}</Radio>
+        <Radio key={v} active={value === v} onClick={() => onChange(field, v)} disabled={disabled}>{l}</Radio>
       ))}
     </div>
   );
 }
 
 // ── Checkbox group ────────────────────────────────────
-export function CheckGroup({ field, value = [], options, onChange }) {
+export function CheckGroup({ field, value = [], options, onChange, disabled }) {
   function toggle(v) {
+    if (disabled) return;
     const next = value.includes(v) ? value.filter(x => x !== v) : [...value, v];
     onChange(field, next);
   }
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
       {options.map(([v, l]) => (
-        <Check key={v} active={value.includes(v)} onClick={() => toggle(v)}>{l}</Check>
+        <Check key={v} active={value.includes(v)} onClick={() => toggle(v)} disabled={disabled}>{l}</Check>
       ))}
     </div>
   );

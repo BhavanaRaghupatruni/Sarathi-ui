@@ -31,9 +31,13 @@ const TX = {
   },
 };
 
-export default function SectionJ({ data, onChange, lang }) {
+export default function SectionJ({ data, onChange, lang, errors = {}, showErrors }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
+
+  const hasAltContact = !!((data.altContactName && data.altContactName.trim()) || (data.altMobile && data.altMobile.trim()));
+  const isCommEnabled = data.willingToReceiveInfo === "YES" && hasAltContact;
+
   return (
     <SectionCard icon="🤝" title={t.title}>
       <Grid cols={3}>
@@ -43,8 +47,8 @@ export default function SectionJ({ data, onChange, lang }) {
         <Field label={t.relationship}>
           <TextInput value={data.altRelationship||""} onChange={v=>up("altRelationship",v)}/>
         </Field>
-        <Field label={t.altMobile}>
-          <TextInput value={data.altMobile||""} onChange={v=>up("altMobile",v)}/>
+        <Field label={t.altMobile} error={showErrors ? errors.altMobile : undefined}>
+          <TextInput value={data.altMobile||""} onChange={v=>up("altMobile",v)} placeholder="10-digit number" error={!!errors.altMobile && showErrors}/>
         </Field>
       </Grid>
       <Field label={t.altOccupation} style={{maxWidth:360}}>
@@ -53,13 +57,16 @@ export default function SectionJ({ data, onChange, lang }) {
       <Field label={t.communityRole}>
         <CheckGroup field="communityRole" value={data.communityRole} options={t.roleOpts} onChange={up}/>
       </Field>
-      <Field label={t.willingInfo}>
+      <Field label={t.willingInfo} required error={showErrors ? errors.willingToReceiveInfo : undefined} style={{ opacity: hasAltContact ? 1 : 0.4 }}>
         <RadioGroup field="willingToReceiveInfo" value={data.willingToReceiveInfo}
-          options={[["YES",t.yes],["NO",t.no]]} onChange={up}/>
+          options={[["YES",t.yes],["NO",t.no]]} onChange={up} disabled={!hasAltContact}/>
       </Field>
-      <Field label={t.prefComm}>
-        <CheckGroup field="preferredComm" value={data.preferredComm} options={t.commOpts} onChange={up}/>
+      <Field label={t.prefComm} required={isCommEnabled} optional={!isCommEnabled} error={showErrors && isCommEnabled ? errors.preferredComm : undefined}>
+        <CheckGroup field="preferredComm" value={data.preferredComm} options={t.commOpts} onChange={up} disabled={!isCommEnabled} />
       </Field>
     </SectionCard>
   );
 }
+
+
+

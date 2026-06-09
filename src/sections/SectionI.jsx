@@ -32,21 +32,26 @@ const TX = {
   },
 };
 
-function YesNo({ value, onChange, yes, no }) {
+function YesNo({ value, onChange, yes, no, disabled, error }) {
   return (
-    <div style={{ display:"flex", gap:10 }}>
+    <div style={{ display:"flex", gap:10, opacity: disabled ? 0.4 : 1 }}>
       {[["YES",yes],["NO",no]].map(([v,l])=>{
         const active = value === v;
         return (
-          <button key={v} onClick={()=>onChange(v)} style={{
-            display:"flex",alignItems:"center",gap:6,
-            padding:"5px 13px",borderRadius:20,
-            border:`1px solid ${active?C.accent:"rgba(255,255,255,0.1)"}`,
-            background:active?C.accentDim:"transparent",
-            color:active?C.accent:C.textMuted,
-            cursor:"pointer",fontSize:12,fontWeight:active?700:400,fontFamily:"inherit",
-          }}>
-            <span style={{width:8,height:8,borderRadius:"50%",border:`2px solid ${active?C.accent:"#475569"}`,background:active?C.accent:"transparent",flexShrink:0}}/>
+          <button
+            key={v}
+            disabled={disabled}
+            onClick={()=> !disabled && onChange(v)}
+            style={{
+              display:"flex",alignItems:"center",gap:6,
+              padding:"5px 13px",borderRadius:20,
+              border:`1px solid ${active ? (error ? C.red : C.accent) : (error ? C.red : "rgba(255,255,255,0.1)")}`,
+              background:active ? (error ? "rgba(248,113,113,0.12)" : C.accentDim) : "transparent",
+              color:active ? (error ? C.red : C.accent) : C.textMuted,
+              cursor:disabled ? "not-allowed" : "pointer",
+              fontSize:12,fontWeight:active?700:400,fontFamily:"inherit",
+            }}>
+            <span style={{width:8,height:8,borderRadius:"50%",border:`2px solid ${active ? (error ? C.red : C.accent) : "#475569"}`,background:active ? (error ? C.red : C.accent) : "transparent",flexShrink:0}}/>
             {l}
           </button>
         );
@@ -55,9 +60,11 @@ function YesNo({ value, onChange, yes, no }) {
   );
 }
 
-export default function SectionI({ data, onChange, lang }) {
+export default function SectionI({ data, onChange, lang, errors = {}, showErrors }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
+
+  const isSmartphoneEnabled = data.hasSmartphone === "YES";
 
   return (
     <SectionCard icon="📄" title={t.title}>
@@ -73,33 +80,47 @@ export default function SectionI({ data, onChange, lang }) {
           </div>
 
           {/* Rows */}
-          {t.docs.map(([key,label],idx)=>(
-            <div key={key} style={{display:"grid",gridTemplateColumns:"2fr 1.4fr 1.4fr",gap:8,padding:"10px 16px",borderTop:"1px solid rgba(255,255,255,0.04)",background:idx%2?"transparent":"rgba(255,255,255,0.015)",alignItems:"center"}}>
-              <span style={{fontSize:13,color:C.text,fontWeight:400}}>{label}</span>
-              <YesNo
-                value={data[`doc_${key}_available`]}
-                onChange={v=>up(`doc_${key}_available`,v)}
-                yes={t.yes} no={t.no}
-              />
-              <YesNo
-                value={data[`doc_${key}_valid`]}
-                onChange={v=>up(`doc_${key}_valid`,v)}
-                yes={t.yes} no={t.no}
-              />
-            </div>
-          ))}
+          {t.docs.map(([key,label],idx)=>{
+            const availErr = errors[`doc_${key}_available`];
+            const validErr = errors[`doc_${key}_valid`];
+            const isAvail = data[`doc_${key}_available`] === "YES";
+
+            return (
+              <div key={key} style={{display:"grid",gridTemplateColumns:"2fr 1.4fr 1.4fr",gap:8,padding:"10px 16px",borderTop:"1px solid rgba(255,255,255,0.04)",background:idx%2?"transparent":"rgba(255,255,255,0.015)",alignItems:"center"}}>
+                <span style={{fontSize:13,color:C.text,fontWeight:400}}>{label}</span>
+                <YesNo
+                  value={data[`doc_${key}_available`]}
+                  onChange={v=>{
+                    up(`doc_${key}_available`, v);
+                    if (v === "NO") {
+                      up(`doc_${key}_valid`, "NO");
+                    }
+                  }}
+                  yes={t.yes} no={t.no}
+                  error={availErr && showErrors}
+                />
+                <YesNo
+                  value={data[`doc_${key}_valid`]}
+                  onChange={v=>up(`doc_${key}_valid`,v)}
+                  yes={t.yes} no={t.no}
+                  disabled={!isAvail}
+                  error={validErr && showErrors && isAvail}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* Smartphone + digital ability */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1.5fr",gap:40}}>
-        <Field label={t.smartphone}>
+        <Field label={t.smartphone} required error={showErrors ? errors.hasSmartphone : undefined}>
           <RadioGroup field="hasSmartphone" value={data.hasSmartphone}
             options={[["YES",t.yes],["NO",t.no]]} onChange={up}/>
         </Field>
-        <Field label={t.digitalAbility}>
+        <Field label={t.digitalAbility} required={isSmartphoneEnabled} optional={!isSmartphoneEnabled} error={showErrors && isSmartphoneEnabled ? errors.digitalAbility : undefined}>
           <RadioGroup field="digitalAbility" value={data.digitalAbility}
-            options={t.abilityOpts} onChange={up}/>
+            options={t.abilityOpts} onChange={up} disabled={!isSmartphoneEnabled} />
         </Field>
       </div>
     </SectionCard>
