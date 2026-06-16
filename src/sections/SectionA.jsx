@@ -4,9 +4,10 @@ import {
   SectionCard, Field, Grid, TextInput, RadioGroup,
 } from "../components/UI";
 
-// Name validation: only letters and spaces
+// Name validation: only letters and spaces, auto-capitalizing first letter of each word
 function sanitizeName(val) {
-  return (val || "").replace(/[^a-zA-Z\s]/g, "");
+  const cleaned = (val || "").replace(/[^a-zA-Z\s]/g, "");
+  return cleaned.replace(/\b\w/g, c => c.toUpperCase());
 }
 
 // ── Translations ────────────────────────────────────────
@@ -56,7 +57,7 @@ const TX = {
   },
 };
 
-export default function SectionA({ data, onChange, lang, errors = {}, showErrors }) {
+export default function SectionA({ data, onChange, lang, errors = {}, showErrors, touched = {}, markTouched }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
   const dobRef = useRef(null);
@@ -80,11 +81,23 @@ export default function SectionA({ data, onChange, lang, errors = {}, showErrors
         </Grid>
 
         <Grid cols={3}>
-          <Field label={t.mobile} required error={showErrors ? errors.primaryMobile : undefined}>
-            <TextInput value={data.primaryMobile} onChange={v => up("primaryMobile", v)} placeholder="10-digit number" error={!!errors.primaryMobile && showErrors} />
+          <Field label={t.mobile} required error={(showErrors || touched.primaryMobile) ? errors.primaryMobile : undefined}>
+            <TextInput
+              value={data.primaryMobile}
+              onChange={v => { up("primaryMobile", v); if (markTouched) markTouched("primaryMobile"); }}
+              onBlur={() => { if (markTouched) markTouched("primaryMobile"); }}
+              placeholder="10-digit number"
+              error={!!errors.primaryMobile && (showErrors || touched.primaryMobile)}
+            />
           </Field>
-          <Field label={t.altMobile} optional error={showErrors ? errors.alternateMobile : undefined}>
-            <TextInput value={data.alternateMobile} onChange={v => up("alternateMobile", v)} placeholder="10-digit number" error={!!errors.alternateMobile && showErrors} />
+          <Field label={t.altMobile} optional error={(showErrors || touched.alternateMobile) ? errors.alternateMobile : undefined}>
+            <TextInput
+              value={data.alternateMobile}
+              onChange={v => { up("alternateMobile", v); if (markTouched) markTouched("alternateMobile"); }}
+              onBlur={() => { if (markTouched) markTouched("alternateMobile"); }}
+              placeholder="10-digit number"
+              error={!!errors.alternateMobile && (showErrors || touched.alternateMobile)}
+            />
           </Field>
           <Field label={t.dob} required error={showErrors ? errors.dob : undefined}>
             <div style={{ display: "flex", gap: 8, alignItems: "center", width: "100%" }}>
@@ -125,13 +138,14 @@ export default function SectionA({ data, onChange, lang, errors = {}, showErrors
               options={[["PROVIDED", t.provided], ["NOT_PROVIDED", t.notProvided]]}
               onChange={up} />
           </Field>
-          <Field label={t.aadhaar} required={isAadhaarRequired} optional={!isAadhaarRequired} error={showErrors ? errors.aadhaarNumber : undefined}>
+          <Field label={t.aadhaar} required={isAadhaarRequired} optional={!isAadhaarRequired} error={(showErrors || touched.aadhaarNumber) ? errors.aadhaarNumber : undefined}>
             <TextInput
               value={data.aadhaarNumber}
-              onChange={v => up("aadhaarNumber", v)}
+              onChange={v => { up("aadhaarNumber", v); if (markTouched) markTouched("aadhaarNumber"); }}
+              onBlur={() => { if (markTouched) markTouched("aadhaarNumber"); }}
               disabled={!isAadhaarRequired}
               placeholder={isAadhaarRequired ? "12-digit number" : "Disabled"}
-              error={!!errors.aadhaarNumber && showErrors}
+              error={!!errors.aadhaarNumber && (showErrors || touched.aadhaarNumber)}
             />
           </Field>
         </Grid>

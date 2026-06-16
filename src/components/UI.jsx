@@ -10,7 +10,7 @@ export function sanitizeNumeric(val) {
 }
 
 // ── Input ────────────────────────────────────────────
-export function TextInput({ value, onChange, placeholder, type = "text", min, max, style, error, disabled, inputRef }) {
+export function TextInput({ value, onChange, placeholder, type = "text", min, max, style, error, disabled, inputRef, onBlur, onFocus }) {
   const borderCol = error ? C.red : (disabled ? "rgba(255,255,255,0.05)" : C.border);
 
   const handleChange = (val) => {
@@ -43,11 +43,13 @@ export function TextInput({ value, onChange, placeholder, type = "text", min, ma
         if (disabled) return;
         e.target.style.borderColor = error ? C.red : C.accent;
         e.target.style.boxShadow = `0 0 0 3px ${error ? "rgba(248,113,113,0.25)" : C.accentGlow}`;
+        if (onFocus) onFocus(e);
       }}
       onBlur={e => {
         if (disabled) return;
         e.target.style.borderColor = borderCol;
         e.target.style.boxShadow = "none";
+        if (onBlur) onBlur(e);
       }}
     />
   );

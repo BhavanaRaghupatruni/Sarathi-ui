@@ -64,7 +64,7 @@ const isUppercaseStart = (str) => !/^[a-z]/.test((str || "").trim());
 const isPhone = (str) => /^\d{10}$/.test((str || "").trim());
 const isAadhaar = (str) => /^\d{12}$/.test((str || "").trim());
 const isPincode = (str) => /^\d{6}$/.test((str || "").trim());const isValidName = (str) => /^[a-zA-Z\s]+$/.test((str || "").trim()); // Only letters and spaces
-function validateSection(section, data) {
+export function validateSection(section, data) {
   const errors = {};
   
   if (section === "A") {
@@ -147,6 +147,7 @@ function validateSection(section, data) {
     const adults = Number(data.adults || 0);
     const children = Number(data.childrenCount || 0);
     const seniors = Number(data.seniors || 0);
+    const expectedTotal = adults + children + seniors;
 
     if (data.adults === "" || isNaN(adults) || adults < 0) {
       errors.adults = "Must be a non-negative number";
@@ -163,18 +164,21 @@ function validateSection(section, data) {
     
     // Require at least one family member entry with detailed warning
     if (!data.familyMembers || data.familyMembers.length === 0) {
-      const expectedTotal = adults + children + seniors;
       errors.familyMembers = expectedTotal > 0 
         ? `At least one family member is required. You specified ${expectedTotal} member(s) in the counts above (${adults} adults, ${children} children, ${seniors} seniors).`
         : "At least one family member is required";
     }
 
     // Validate family member count matches sum of age groups
-    if (data.familyMembers && data.familyMembers.length > 0) {
-      const expectedTotal = adults + children + seniors;
-      if (data.familyMembers.length !== expectedTotal && expectedTotal > 0) {
+    if (data.familyMembers) {
+      if (data.familyMembers.length !== expectedTotal) {
         errors.familyMembers = `Family member details (${data.familyMembers.length}) must match total count from age groups (${expectedTotal}: ${adults} adults + ${children} children + ${seniors} seniors)`;
       }
+
+      // Track actual counts per category
+      let actualChildren = 0;
+      let actualAdults = 0;
+      let actualSeniors = 0;
 
       // Validate each member's details and age group alignment
       data.familyMembers.forEach((m, idx) => {
@@ -185,38 +189,31 @@ function validateSection(section, data) {
         } else if (!isValidName(m.name)) {
           errors[`member_${idx}_name`] = "Name can only contain letters and spaces";
         }
+        
         if (!m.relation || !m.relation.trim()) {
           errors[`member_${idx}_relation`] = "Relation is required";
         }
+        
         if (m.age === "" || isNaN(m.age) || Number(m.age) < 0) {
           errors[`member_${idx}_age`] = "Age is required (>= 0)";
         } else {
-          // Age group validation
           const age = Number(m.age);
-          const isAdult = age >= 18 && age < 60;
-          const isChild = age < 18;
-          const isSenior = age >= 60;
-          
-          // Track if member falls into expected age group
-          let ageGroupError = null;
-          if (isChild && children > 0) {
-            // Child is in correct group
-          } else if (isAdult && adults > 0) {
-            // Adult is in correct group
-          } else if (isSenior && seniors > 0) {
-            // Senior is in correct group
-          } else if (isChild && children === 0) {
-            ageGroupError = `Child (age ${age}) detected but no children count specified`;
-          } else if (isAdult && adults === 0) {
-            ageGroupError = `Adult (age ${age}) detected but no adults count specified`;
-          } else if (isSenior && seniors === 0) {
-            ageGroupError = `Senior (age ${age}) detected but no seniors count specified`;
+          if (age < 18) {
+            actualChildren++;
+          } else if (age >= 18 && age <= 60) {
+            actualAdults++;
+          } else if (age > 60) {
+            actualSeniors++;
           }
-          
-          if (ageGroupError) {
-            errors[`member_${idx}_age`] = ageGroupError;
+
+          // Check if "Self" age matches Section A
+          if (m.relation === "Self") {
+            if (Number(m.age) !== Number(data.age)) {
+              errors[`member_${idx}_age`] = `Age for "Self" (${m.age}) must match Section A age (${data.age})`;
+            }
           }
         }
+        
         if (!m.gender || m.gender === "--" || m.gender === "") {
           errors[`member_${idx}_gender`] = "Gender is required";
         }
@@ -230,6 +227,17 @@ function validateSection(section, data) {
           errors[`member_${idx}_income`] = "Income is required (>= 0)";
         }
       });
+
+      // Age group consistency validation (summary counts vs table count categories)
+      if (actualChildren !== children) {
+        errors.childrenCount = `Number of children in table (${actualChildren}) does not match summary count (${children})`;
+      }
+      if (actualAdults !== adults) {
+        errors.adults = `Number of adults in table (${actualAdults}) does not match summary count (${adults})`;
+      }
+      if (actualSeniors !== seniors) {
+        errors.seniors = `Number of seniors in table (${actualSeniors}) does not match summary count (${seniors})`;
+      }
     }
   }
 
@@ -486,15 +494,242 @@ function validateSection(section, data) {
   return errors;
 }
 
+// ── Preview Modal Component ──────────────────────────
+function PreviewModal({ data, onClose, lang }) {
+  const title = lang === "en" ? "Survey Response Preview" : "సర్వే ప్రతిస్పందన ప్రివ్యూ";
+  const closeText = lang === "en" ? "Close Preview" : "ప్రివ్యూ మూసివేయి";
+
+  const renderSectionHeader = (titleText) => (
+    <div style={{
+      fontSize: 13, fontWeight: 800, color: C.accent,
+      borderBottom: `1px solid ${C.border}`, paddingBottom: 6,
+      marginTop: 20, marginBottom: 12, letterSpacing: "0.05em",
+      textTransform: "uppercase"
+    }}>
+      {titleText}
+    </div>
+  );
+
+  const renderItem = (label, val) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <span style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>{label}</span>
+      <span style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>{val || "—"}</span>
+    </div>
+  );
+
+  return (
+    <div style={{
+      position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+      backgroundColor: "rgba(10, 12, 18, 0.85)", backdropFilter: "blur(12px)",
+      display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000,
+      padding: 20, boxSizing: "border-box"
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 850, maxHeight: "90vh",
+        backgroundColor: C.bgCard, border: `1px solid ${C.border}`,
+        borderRadius: 16, display: "flex", flexDirection: "column",
+        overflow: "hidden", boxShadow: "0 24px 60px rgba(0,0,0,0.6)"
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "18px 24px", borderBottom: `1px solid ${C.border}`,
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          background: "rgba(251,191,36,0.04)"
+        }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: C.accent }}>
+            👁 {title}
+          </h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none", border: "none", color: C.textMuted,
+              cursor: "pointer", fontSize: 20, fontWeight: 300, transition: "color 0.2s"
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = C.red}
+            onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Scrollable Body */}
+        <div style={{ padding: "10px 24px 30px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* Section A */}
+          {renderSectionHeader(lang === "en" ? "A. Identity & Address" : "A. గుర్తింపు & చిరునామా")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {renderItem(lang === "en" ? "Full Name" : "పూర్తి పేరు", [data.firstName, data.middleName, data.lastName].filter(Boolean).join(" "))}
+            {renderItem(lang === "en" ? "Primary Mobile" : "ప్రాథమిక మొబైల్", data.primaryMobile)}
+            {renderItem(lang === "en" ? "Alternate Mobile" : "ప్రత్యామ్నాయ మొబైల్", data.alternateMobile)}
+            {renderItem(lang === "en" ? "DOB / Age" : "పుట్టిన తేదీ / వయస్సు", `${data.dob || "—"} (${data.age || "—"} yrs)`)}
+            {renderItem(lang === "en" ? "Aadhaar Number" : "ఆధార్ సంఖ్య", data.aadhaarConsent === "PROVIDED" ? data.aadhaarNumber : (lang === "en" ? "Not Provided" : "అందించలేదు"))}
+            {renderItem(lang === "en" ? "Gender" : "లింగం", data.gender)}
+            {renderItem(lang === "en" ? "Marital Status" : "వైవాహిక స్థితి", data.maritalStatus)}
+            {renderItem(lang === "en" ? "Religion" : "మతం", data.religion)}
+            {renderItem(lang === "en" ? "Social Category" : "సామాజిక వర్గం", data.socialCategory)}
+            {renderItem(lang === "en" ? "Sub-Caste" : "ఉప-కులం", data.subCaste)}
+            {renderItem(lang === "en" ? "Residential Status" : "నివాస స్థితి", data.residentialStatus)}
+            {renderItem(lang === "en" ? "Duration at Address" : "చిరునామాలో నివాసం", data.durationAtAddress)}
+            <div style={{ gridColumn: "span 3" }}>
+              {renderItem(lang === "en" ? "Address" : "చిరునామా", [data.houseNo, data.street, data.village, data.mandal, data.district, data.state, data.pincode].filter(Boolean).join(", "))}
+            </div>
+          </div>
+
+          {/* Section B */}
+          {renderSectionHeader(lang === "en" ? "B. Household Information" : "B. గృహ సమాచారం")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {renderItem(lang === "en" ? "Adults Count" : "పెద్దల సంఖ్య", data.adults)}
+            {renderItem(lang === "en" ? "Children Count" : "పిల్లల సంఖ్య", data.childrenCount)}
+            {renderItem(lang === "en" ? "Seniors Count" : "వృద్ధుల సంఖ్య", data.seniors)}
+            {renderItem(lang === "en" ? "Family Structure" : "కుటుంబ నిర్మాణం", data.familyStructure)}
+          </div>
+          {data.familyMembers && data.familyMembers.length > 0 && (
+            <div style={{ marginTop: 12, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 0.7fr 0.8fr 1.5fr 1fr", gap: 8, padding: "8px 12px", background: "rgba(255,255,255,0.03)" }}>
+                {["Name", "Relation", "Age", "Gender", "Occupation", "Income"].map(h => (
+                  <span key={h} style={{ fontSize: 9, fontWeight: 800, color: C.accent, textTransform: "uppercase" }}>{h}</span>
+                ))}
+              </div>
+              {data.familyMembers.map((m, i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 0.7fr 0.8fr 1.5fr 1fr", gap: 8, padding: "8px 12px", borderTop: `1px solid rgba(255,255,255,0.04)` }}>
+                  <span style={{ fontSize: 12 }}>{m.name}</span>
+                  <span style={{ fontSize: 12 }}>{m.relation}</span>
+                  <span style={{ fontSize: 12 }}>{m.age}</span>
+                  <span style={{ fontSize: 12 }}>{m.gender}</span>
+                  <span style={{ fontSize: 12 }}>{m.employment}</span>
+                  <span style={{ fontSize: 12 }}>₹{m.income}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Section C & D */}
+          {renderSectionHeader(lang === "en" ? "C & D. Employment & Income" : "C & D. ఉపాధి & ఆదాయం")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {renderItem(lang === "en" ? "Main Occupation" : "ప్రధాన ఉపాధి", data.mainOccupation)}
+            {renderItem(lang === "en" ? "Employment Nature" : "ఉపాధి స్వభావం", data.employmentNature)}
+            {renderItem(lang === "en" ? "Monthly Income Range" : "నెలవారీ ఆదాయ పరిధి", data.monthlyIncomeRange)}
+            {renderItem(lang === "en" ? "Annual Income" : "వార్షిక ఆదాయం", `₹${data.annualIncome}`)}
+            {renderItem(lang === "en" ? "Bank Account Status" : "బ్యాంక్ ఖాతా స్థితి", data.bankAccount)}
+            {renderItem(lang === "en" ? "Liquid Savings" : "ద్రవ పొదుపు", data.liquidSavings)}
+            <div style={{ gridColumn: "span 3" }}>
+              {renderItem(lang === "en" ? "Secondary Income Sources" : "ద్వితీయ ఆదాయ మార్గాలు", data.secondaryIncome?.join(", ") || "None")}
+            </div>
+            <div style={{ gridColumn: "span 3" }}>
+              {renderItem(lang === "en" ? "Livelihood Challenges" : "జీవనోపాధి సవాళ్లు", data.empChallenges?.join(", ") || "None")}
+            </div>
+            <div style={{ gridColumn: "span 3" }}>
+              {renderItem(lang === "en" ? "Debt Reasons" : "అప్పుల కారణాలు", data.debtReasons?.join(", ") || "None")}
+            </div>
+          </div>
+
+          {/* Section E */}
+          {renderSectionHeader(lang === "en" ? "E. Assets & Amenities" : "E. ఆస్తులు & సౌకర్యాలు")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {renderItem(lang === "en" ? "Housing Type" : "గృహ రకం", data.housingType)}
+            {renderItem(lang === "en" ? "Housing Ownership" : "గృహ యాజమాన్యం", data.housingOwnership)}
+            {renderItem(lang === "en" ? "Agriculture Land" : "వ్యవసాయ భూమి", data.agriLand)}
+            {renderItem(lang === "en" ? "Livestock" : "పశుసంపద", data.livestock)}
+            {renderItem(lang === "en" ? "Two Wheelers" : "ద్విచక్ర వాహనాలు", data.twoWheelers)}
+            {renderItem(lang === "en" ? "Four Wheelers" : "నాలుగు చక్రాల వాహనాలు", data.fourWheelers)}
+            {renderItem(lang === "en" ? "Smartphones Count" : "స్మార్ట్‌ఫోన్ల సంఖ్య", data.smartphones)}
+            <div style={{ gridColumn: "span 3" }}>
+              {renderItem(
+                lang === "en" ? "Available Amenities" : "అందుబాటులో ఉన్న సౌకర్యాలు",
+                [
+                  data.amenity_electricity === "YES" && "Electricity",
+                  data.amenity_drinkingWater === "YES" && "Drinking Water",
+                  data.amenity_toilet === "YES" && "Toilet",
+                  data.amenity_lpgGas === "YES" && "LPG Gas",
+                  data.amenity_internet === "YES" && "Internet"
+                ].filter(Boolean).join(", ") || "None"
+              )}
+            </div>
+          </div>
+
+          {/* Section F & G */}
+          {renderSectionHeader(lang === "en" ? "F & G. Education & Health" : "F & G. విద్య & ఆరోగ్యం")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>{lang === "en" ? "Education Members" : "విద్య వివరాలు"}</span>
+              {data.eduMembers && data.eduMembers.map((e, idx) => (
+                <div key={idx} style={{ fontSize: 12 }}>• {e.name}: {e.status} {e.qualification ? `(${e.qualification})` : ""}</div>
+              ))}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>{lang === "en" ? "Chronic Conditions" : "దీర్ఘకాలిక పరిస్థితులు"}</span>
+              {data.chronicConditions && data.chronicConditions.map((c, idx) => (
+                <div key={idx} style={{ fontSize: 12 }}>• {c.name}: {c.condition} ({c.duration}, {c.treatment}, Monthly Cost: ₹{c.monthly})</div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section H & I */}
+          {renderSectionHeader(lang === "en" ? "H & I. Schemes & Digital Access" : "H & I. పథకాలు & డిజిటల్ యాక్సెస్")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {renderItem(lang === "en" ? "Has Smartphone" : "స్మార్ట్‌ఫోన్ కలిగి ఉన్నారా", data.hasSmartphone)}
+            {renderItem(lang === "en" ? "Digital Ability" : "డిజిటల్ సామర్థ్యం", data.digitalAbility)}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 10, color: C.textMuted, textTransform: "uppercase", fontWeight: 700 }}>{lang === "en" ? "Documents Status" : "పత్రాల స్థితి"}</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px" }}>
+              {["aadhaar", "pan", "rationCard", "incomeCert", "casteCert", "disabilityCert", "voterId", "bankPassbook"].map(k => (
+                <div key={k} style={{ fontSize: 12 }}>
+                  • <span style={{ textTransform: "capitalize" }}>{k.replace("Cert", " Cert").replace("Card", " Card").replace("Id", " ID").replace("Passbook", " Passbook")}</span>: {data[`doc_${k}_available`] === "YES" ? (lang === "en" ? "Available" : "అందుబాటులో ఉంది") : (lang === "en" ? "N/A" : "లేదు")}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section J & K */}
+          {renderSectionHeader(lang === "en" ? "J & K. Community & Consent" : "J & K. సమాజం & అంగీకారం")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {renderItem(lang === "en" ? "Alt. Contact Name" : "ప్రత్యామ్నాయ సంప్రదింపు పేరు", data.altContactName)}
+            {renderItem(lang === "en" ? "Alt. Mobile" : "ప్రత్యామ్నాయ మొబైల్", data.altMobile)}
+            {renderItem(lang === "en" ? "Consent Status" : "అంగీకార స్థితి", data.consentStatus)}
+            {renderItem(lang === "en" ? "Signature Name" : "సంతకం చేసిన పేరు", data.signatureName)}
+            {renderItem(lang === "en" ? "Surveyor Name" : "సర్వేయర్ పేరు", data.surveyorName)}
+            {renderItem(lang === "en" ? "Survey Date & Location" : "సర్వే తేదీ & స్థలం", `${data.consentDate || "—"} @ ${data.surveyLocation || "—"}`)}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: "16px 24px", borderTop: `1px solid ${C.border}`,
+          display: "flex", justifyContent: "flex-end", background: "rgba(0,0,0,0.2)"
+        }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "10px 24px", borderRadius: 8, border: `1px solid ${C.border}`,
+              background: "transparent", color: C.text, cursor: "pointer",
+              fontWeight: 700, fontSize: 13, fontFamily: "inherit", transition: "all 0.15s"
+            }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = C.accent}
+            onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+          >
+            {closeText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [lang, setLang] = useState("en");
   const [current, setCurrent] = useState("A");
   const [visited, setVisited] = useState(new Set(["A"]));
   const [formData, setFormData] = useState(INIT);
   const [showErrors, setShowErrors] = useState(false);
+  const [touched, setTouched] = useState({});
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState("");
+
+  const markTouched = (field) => {
+    setTouched(t => ({ ...t, [field]: true }));
+  };
 
   // Cleanup conditional fields when parent states change
   useEffect(() => {
@@ -663,19 +898,40 @@ export default function App() {
       submitted_at: new Date().toISOString(),
       sections_visited: [...visited],
     };
-    try {
-      const res = await fetch("http://localhost:4000/api/surveys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(`Server ${res.status}`);
-      setSubmitted(true);
-    } catch {
-      setSubmitError(JSON.stringify(payload, null, 2));
-    } finally {
-      setSubmitting(false);
+    
+    // Attempt submission to port 4000 first, fallback to 8000
+    const urls = [
+      "http://localhost:4000/api/surveys",
+      "http://localhost:8000/api/surveys"
+    ];
+    
+    let success = false;
+    for (const url of urls) {
+      try {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 2000); // 2-second timeout
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        clearTimeout(id);
+        if (res.ok) {
+          success = true;
+          break;
+        }
+      } catch (err) {
+        // Continue to next URL
+      }
     }
+    
+    if (success) {
+      setSubmitted(true);
+    } else {
+      setSubmitError(JSON.stringify(payload, null, 2));
+    }
+    setSubmitting(false);
   }
 
   const SectionComp = SECTION_COMPS[current];
@@ -719,90 +975,144 @@ export default function App() {
         </div>
 
         {/* Progress bar */}
-        <div style={{ height:3, background:"rgba(255,255,255,0.07)", marginBottom:4 }}>
-          <div style={{ height:"100%", width:`${progress}%`, background:`linear-gradient(90deg,${C.accent},#f59e0b)`, transition:"width 0.4s ease", borderRadius:2 }}/>
-        </div>
-        <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.textMuted, paddingBottom:10 }}>
-          <span>{lang==="en" ? sectionMeta.subtitle_en : sectionMeta.subtitle_te}</span>
-          <span style={{ color:C.accent, fontWeight:700 }}>{idx+1} / {SECTIONS.length}</span>
-        </div>
-
-        {/* Section tabs */}
-        <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:12, flexWrap:"wrap", scrollbarWidth:"none" }}>
-          {SECTIONS.map(s => {
-            const isActive = s.key === current;
-            const isDone = visited.has(s.key) && !isActive;
-            return (
-              <button key={s.key} onClick={()=>goTo(s.key)} style={{
-                padding:"5px 13px", borderRadius:20, whiteSpace:"nowrap",
-                border:`1px solid ${isActive ? C.accent : isDone ? "rgba(251,191,36,0.35)" : "rgba(255,255,255,0.1)"}`,
-                background: isActive ? C.accent : isDone ? "rgba(251,191,36,0.08)" : "transparent",
-                color: isActive ? C.bg : isDone ? C.accent : C.textMuted,
-                cursor:"pointer", fontSize:11, fontWeight: isActive ? 800 : isDone ? 600 : 400,
-                fontFamily:"inherit", transition:"all 0.15s",
-              }}>
-                {isDone && !isActive ? "✓ " : ""}{lang==="en" ? s.en : s.te}
-              </button>
-            );
-          })}
-        </div>
-      </header>
-
-      {/* ══ BODY ═══════════════════════════════════════ */}
-      <main style={{ maxWidth:960, margin:"0 auto", padding:"28px 24px 80px" }}>
-        {current === "K" ? (
-          <SectionComp
-            data={formData} onChange={onChange} lang={lang}
-            allData={formData}
-            errors={validateSection("K", formData)}
-            showErrors={showErrors}
-            allSectionsValid={allSectionsValid}
-            submitting={submitting} submitted={submitted}
-            submitError={submitError} onSubmit={handleSubmit}
-          />
-        ) : (
-          <SectionComp
-            data={formData}
-            onChange={onChange}
-            lang={lang}
-            errors={validateSection(current, formData)}
-            showErrors={showErrors}
-          />
+        {!submitted && (
+          <div style={{ height:3, background:"rgba(255,255,255,0.07)", marginBottom:4 }}>
+            <div style={{ height:"100%", width:`${progress}%`, background:`linear-gradient(90deg,${C.accent},#f59e0b)`, transition:"width 0.4s ease", borderRadius:2 }}/>
+          </div>
+        )}
+        {!submitted && (
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.textMuted, paddingBottom:10 }}>
+            <span>{lang==="en" ? sectionMeta.subtitle_en : sectionMeta.subtitle_te}</span>
+            <span style={{ color:C.accent, fontWeight:700 }}>{idx+1} / {SECTIONS.length}</span>
+          </div>
         )}
 
-        {/* ── NAV BUTTONS ───────────────────────────── */}
-        <div style={{ display:"flex", justifyContent:"space-between", marginTop:28 }}>
-          {/* Back — hidden on section A */}
-          {current !== "A" ? (
-            <button onClick={prev} style={{
-              padding:"10px 26px", borderRadius:9,
-              border:`1px solid rgba(255,255,255,0.15)`,
-              background:"transparent", color:C.textMuted,
-              cursor:"pointer", fontSize:13, fontWeight:500, fontFamily:"inherit",
-              transition:"all 0.2s",
-            }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,0.15)";e.currentTarget.style.color=C.textMuted;}}
-            >← {lang==="en"?"Back":"వెనక్కి"}</button>
-          ) : <span/>}
+        {/* Section tabs */}
+        {!submitted && (
+          <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:12, flexWrap:"wrap", scrollbarWidth:"none" }}>
+            {SECTIONS.map(s => {
+              const isActive = s.key === current;
+              const isDone = visited.has(s.key) && !isActive;
+              return (
+                <button key={s.key} onClick={()=>goTo(s.key)} style={{
+                  padding:"5px 13px", borderRadius:20, whiteSpace:"nowrap",
+                  border:`1px solid ${isActive ? C.accent : isDone ? "rgba(251,191,36,0.35)" : "rgba(255,255,255,0.1)"}`,
+                  background: isActive ? C.accent : isDone ? "rgba(251,191,36,0.08)" : "transparent",
+                  color: isActive ? C.bg : isDone ? C.accent : C.textMuted,
+                  cursor:"pointer", fontSize:11, fontWeight: isActive ? 800 : isDone ? 600 : 400,
+                  fontFamily:"inherit", transition:"all 0.15s",
+                }}>
+                  {isDone && !isActive ? "✓ " : ""}{lang==="en" ? s.en : s.te}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </header>
+ 
+      {/* ══ BODY ═══════════════════════════════════════ */}
+      <main style={{ maxWidth:960, margin:"0 auto", padding:"28px 24px 80px" }}>
+        {submitted ? (
+          <div style={{
+            textAlign:"center",
+            padding:"48px 32px",
+            background:C.bgCard,
+            border:`1px solid ${C.border}`,
+            borderRadius:16,
+            boxShadow:"0 12px 40px rgba(0,0,0,0.4)",
+            maxWidth: 600,
+            margin: "40px auto 0"
+          }}>
+            <div style={{ fontSize:64, marginBottom:20 }}>🎉</div>
+            <h2 style={{ color:C.green, fontSize:26, fontWeight:800, margin:"0 0 12px" }}>
+              {lang === "en" ? "Survey submitted successfully." : "సర్వే విజయవంతంగా సమర్పించబడింది."}
+            </h2>
+            <p style={{ color:C.textMuted, fontSize:15, margin:"0 0 32px", lineHeight:1.6 }}>
+              {lang === "en" ? "Thank you. Your response has been recorded successfully." : "ధన్యవాదాలు. మీ ప్రతిస్పందన విజయవంతంగా నమోదైంది."}
+            </p>
+            <button
+              onClick={() => {
+                setFormData(INIT);
+                setVisited(new Set(["A"]));
+                setCurrent("A");
+                setSubmitted(false);
+                setShowErrors(false);
+                setTouched({});
+              }}
+              style={{
+                padding:"12px 36px", borderRadius:10, border:"none",
+                background:`linear-gradient(135deg, ${C.accent} 0%, #f59e0b 100%)`,
+                color:C.bg, cursor:"pointer", fontWeight:800, fontSize:14,
+                fontFamily:"inherit", boxShadow:"0 4px 16px rgba(251,191,36,0.25)",
+                transition:"all 0.2s"
+              }}
+              onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"}
+              onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}
+            >
+              {lang === "en" ? "Submit Another Survey" : "మరొక సర్వేని సమర్పించండి"}
+            </button>
+          </div>
+        ) : (
+          <>
+            {current === "K" ? (
+              <SectionComp
+                data={formData} onChange={onChange} lang={lang}
+                allData={formData}
+                errors={validateSection("K", formData)}
+                showErrors={showErrors}
+                allSectionsValid={allSectionsValid}
+                submitting={submitting} submitted={submitted}
+                submitError={submitError} onSubmit={handleSubmit}
+                onPreview={() => setPreviewOpen(true)}
+              />
+            ) : (
+              <SectionComp
+                data={formData}
+                onChange={onChange}
+                lang={lang}
+                errors={validateSection(current, formData)}
+                showErrors={showErrors}
+                touched={touched}
+                markTouched={markTouched}
+              />
+            )}
 
-          {/* Next — hidden on section K */}
-          {current !== "K" && (
-            <button onClick={next} style={{
-              padding:"10px 28px", borderRadius:9,
-              border:"none",
-              background:`linear-gradient(135deg,${C.accent},#f59e0b)`,
-              color:C.bg, cursor:"pointer", fontSize:13,
-              fontWeight:800, fontFamily:"inherit",
-              boxShadow:"0 4px 18px rgba(251,191,36,0.3)",
-              transition:"all 0.2s",
-            }}
-            onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"}
-            onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}
-            >{lang==="en"?"Next →":"తదుపరి →"}</button>
-          )}
-        </div>
+            {/* ── NAV BUTTONS ───────────────────────────── */}
+            <div style={{ display:"flex", justifyContent:"space-between", marginTop:28 }}>
+              {/* Back — hidden on section A */}
+              {current !== "A" ? (
+                <button onClick={prev} style={{
+                  padding:"10px 26px", borderRadius:9,
+                  border:`1px solid rgba(255,255,255,0.15)`,
+                  background:"transparent", color:C.textMuted,
+                  cursor:"pointer", fontSize:13, fontWeight:500, fontFamily:"inherit",
+                  transition:"all 0.2s",
+                }}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,0.15)";e.currentTarget.style.color=C.textMuted;}}
+                >← {lang==="en"?"Back":"వెనక్కి"}</button>
+              ) : <span/>}
+
+              {/* Next — hidden on section K */}
+              {current !== "K" && (
+                <button onClick={next} style={{
+                  padding:"10px 28px", borderRadius:9,
+                  border:"none",
+                  background:`linear-gradient(135deg,${C.accent},#f59e0b)`,
+                  color:C.bg, cursor:"pointer", fontSize:13,
+                  fontWeight:800, fontFamily:"inherit",
+                  boxShadow:"0 4px 18px rgba(251,191,36,0.3)",
+                  transition:"all 0.2s",
+                }}
+                onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"}
+                onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}
+                >{lang==="en"?"Next →":"తదుపరి →"}</button>
+              )}
+            </div>
+          </>
+        )}
       </main>
+      {previewOpen && <PreviewModal data={formData} onClose={() => setPreviewOpen(false)} lang={lang} />}
     </div>
   );
 }

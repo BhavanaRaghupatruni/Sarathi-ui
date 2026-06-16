@@ -2,9 +2,10 @@ import { C } from "../theme";
 import { useRef } from "react";
 import { SectionCard, Field, Grid, TextInput, RadioGroup } from "../components/UI";
 
-// Name validation: only letters and spaces
+// Name validation: only letters and spaces, auto-capitalizing first letter of each word
 function sanitizeName(val) {
-  return (val || "").replace(/[^a-zA-Z\s]/g, "");
+  const cleaned = (val || "").replace(/[^a-zA-Z\s]/g, "");
+  return cleaned.replace(/\b\w/g, c => c.toUpperCase());
 }
 
 const TX = {
@@ -22,7 +23,7 @@ const TX = {
     remarks: "Additional Remarks",
     submit: "✓ Submit Survey",
     submitting: "Submitting...",
-    submitted: "Survey Submitted!",
+    submitted: "Survey submitted successfully.",
     submittedMsg: "Thank you. Your response has been recorded successfully.",
     demoNote: "Demo mode – JSON payload that would be sent to PostgreSQL:",
   },
@@ -40,13 +41,13 @@ const TX = {
     remarks: "అదనపు వ్యాఖ్యలు",
     submit: "✓ సర్వే సమర్పించండి",
     submitting: "సమర్పిస్తోంది...",
-    submitted: "సర్వే సమర్పించారు!",
+    submitted: "సర్వే విజయవంతంగా సమర్పించబడింది.",
     submittedMsg: "ధన్యవాదాలు. మీ ప్రతిస్పందన విజయవంతంగా నమోదైంది.",
     demoNote: "డెమో మోడ్ – PostgreSQL కి పంపబడే JSON:",
   },
 };
 
-export default function SectionK({ data, onChange, lang, allData, submitting, submitted, submitError, onSubmit, errors = {}, showErrors, allSectionsValid }) {
+export default function SectionK({ data, onChange, lang, allData, submitting, submitted, submitError, onSubmit, errors = {}, showErrors, allSectionsValid, onPreview }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
   const consentRef = useRef(null);
@@ -152,8 +153,23 @@ export default function SectionK({ data, onChange, lang, allData, submitting, su
         />
       </Field>
 
-      {/* Submit button */}
-      <div style={{ display:"flex", justifyContent:"flex-end" }}>
+      {/* Action buttons (Preview & Submit) */}
+      <div style={{ display:"flex", justifyContent:"flex-end", gap:12, flexWrap:"wrap" }}>
+        <button
+          type="button"
+          onClick={onPreview}
+          style={{
+            padding:"14px 28px", borderRadius:10,
+            border:`1px solid ${C.accent}`,
+            background:"transparent", color:C.accent,
+            cursor:"pointer", fontWeight:800, fontSize:15, fontFamily:"inherit",
+            transition:"all 0.2s",
+          }}
+          onMouseEnter={e=>e.currentTarget.style.background=C.accentDim}
+          onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+        >
+          {lang === "en" ? "👁 Preview Details" : "👁 వివరాల ప్రివ్యూ"}
+        </button>
         <button
           onClick={onSubmit}
           disabled={submitting || data.consentStatus !== "AGREED" || !allSectionsValid}

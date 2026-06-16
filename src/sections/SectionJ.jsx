@@ -1,5 +1,11 @@
 import { SectionCard, Field, Grid, TextInput, RadioGroup, CheckGroup } from "../components/UI";
 
+// Name validation: only letters and spaces, auto-capitalizing first letter of each word
+function sanitizeName(val) {
+  const cleaned = (val || "").replace(/[^a-zA-Z\s]/g, "");
+  return cleaned.replace(/\b\w/g, c => c.toUpperCase());
+}
+
 const TX = {
   en: {
     title: "Social & Community Information",
@@ -31,7 +37,7 @@ const TX = {
   },
 };
 
-export default function SectionJ({ data, onChange, lang, errors = {}, showErrors }) {
+export default function SectionJ({ data, onChange, lang, errors = {}, showErrors, touched = {}, markTouched }) {
   const t = TX[lang];
   const up = (f, v) => onChange(f, v);
 
@@ -42,13 +48,19 @@ export default function SectionJ({ data, onChange, lang, errors = {}, showErrors
     <SectionCard icon="🤝" title={t.title}>
       <Grid cols={3}>
         <Field label={t.altContact}>
-          <TextInput value={data.altContactName||""} onChange={v=>up("altContactName",v)}/>
+          <TextInput value={data.altContactName||""} onChange={v=>up("altContactName",sanitizeName(v))}/>
         </Field>
         <Field label={t.relationship}>
           <TextInput value={data.altRelationship||""} onChange={v=>up("altRelationship",v)}/>
         </Field>
-        <Field label={t.altMobile} error={showErrors ? errors.altMobile : undefined}>
-          <TextInput value={data.altMobile||""} onChange={v=>up("altMobile",v)} placeholder="10-digit number" error={!!errors.altMobile && showErrors}/>
+        <Field label={t.altMobile} error={(showErrors || touched.altMobile) ? errors.altMobile : undefined}>
+          <TextInput
+            value={data.altMobile||""}
+            onChange={v=>{ up("altMobile",v); if (markTouched) markTouched("altMobile"); }}
+            onBlur={() => { if (markTouched) markTouched("altMobile"); }}
+            placeholder="10-digit number"
+            error={!!errors.altMobile && (showErrors || touched.altMobile)}
+          />
         </Field>
       </Grid>
       <Field label={t.altOccupation} style={{maxWidth:360}}>
