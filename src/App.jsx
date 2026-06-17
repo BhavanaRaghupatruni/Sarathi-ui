@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { C } from "./theme";
 import SectionA from "./sections/SectionA";
 import SectionB from "./sections/SectionB";
@@ -715,6 +715,49 @@ function PreviewModal({ data, onClose, lang }) {
   );
 }
 
+function renderMarkdown(text) {
+  if (!text) return null;
+  const lines = text.split("\n");
+  return lines.map((line, idx) => {
+    if (line.trim().startsWith("-") || line.trim().startsWith("*")) {
+      const content = line.trim().substring(1).trim();
+      return (
+        <li key={idx} style={{ marginBottom: 4, marginLeft: 16, listStyleType: "disc", lineHeight: 1.5 }}>
+          {parseInlineMarkdown(content)}
+        </li>
+      );
+    }
+    if (line.trim().startsWith("#")) {
+      const hashes = line.match(/^#+/)[0];
+      const content = line.substring(hashes.length).trim();
+      const fontSize = hashes.length === 1 ? 20 : hashes.length === 2 ? 18 : 16;
+      return (
+        <h4 key={idx} style={{ margin: "14px 0 6px 0", color: C.accent, fontWeight: 700, fontSize }}>
+          {parseInlineMarkdown(content)}
+        </h4>
+      );
+    }
+    if (line.trim() === "") {
+      return <div key={idx} style={{ height: 8 }} />;
+    }
+    return (
+      <p key={idx} style={{ margin: "0 0 8px 0", lineHeight: 1.5 }}>
+        {parseInlineMarkdown(line)}
+      </p>
+    );
+  });
+}
+
+function parseInlineMarkdown(text) {
+  const parts = text.split(/\*\*([^*]+)\*\*/g);
+  return parts.map((part, idx) => {
+    if (idx % 2 === 1) {
+      return <strong key={idx} style={{ color: C.white, fontWeight: 700 }}>{part}</strong>;
+    }
+    return part;
+  });
+}
+
 export default function App() {
   const [lang, setLang] = useState("en");
   const [current, setCurrent] = useState("A");
@@ -726,6 +769,19 @@ export default function App() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [loadingChat, setLoadingChat] = useState(false);
+  const [chatRecommendations, setChatRecommendations] = useState([]);
+  const [sessionId, setSessionId] = useState("");
+  const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages, loadingChat]);
+
 
   const markTouched = (field) => {
     setTouched(t => ({ ...t, [field]: true }));
@@ -927,12 +983,85 @@ export default function App() {
     }
     
     if (success) {
+      const sessId = "session_" + Date.now();
+      setSessionId(sessId);
       setSubmitted(true);
+      
+      // Initialize chatbot and query matching schemes
+      (async () => {
+        try {
+          setLoadingChat(true);
+          const chatRes = await fetch("http://localhost:4000/chat/completions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              session_id: sessId,
+              profile: payload,
+              question: "Show my eligible welfare schemes and document recommendations based on my profile.",
+              history: []
+            })
+          });
+          if (chatRes.ok) {
+            const chatData = await chatRes.json();
+            setChatMessages([{ role: "assistant", content: chatData.response }]);
+            setChatRecommendations(chatData.recommendations || []);
+          } else {
+            setChatMessages([{ role: "assistant", content: "Hello! I am your Saarthi Welfare Assistant. Based on your profile, I will evaluate your eligibility." }]);
+          }
+        } catch (e) {
+          setChatMessages([{ role: "assistant", content: "Hello! I am your Saarthi Welfare Assistant. Failed to contact the backend service." }]);
+        } finally {
+          setLoadingChat(false);
+        }
+      })();
     } else {
       setSubmitError(JSON.stringify(payload, null, 2));
     }
     setSubmitting(false);
   }
+
+  async function handleSendChatMessage(customQuery = null) {
+    const textToSend = customQuery || chatInput;
+    if (!textToSend.trim() || loadingChat) return;
+
+    const newMessages = [...chatMessages, { role: "user", content: textToSend }];
+    setChatMessages(newMessages);
+    setChatInput("");
+    setLoadingChat(true);
+
+    try {
+      const historyPayload = chatMessages.map(m => ({
+        role: m.role,
+        content: m.content
+      }));
+
+      const res = await fetch("http://localhost:4000/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          profile: formData,
+          question: textToSend,
+          history: historyPayload
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setChatMessages(prev => [...prev, { role: "assistant", content: data.response }]);
+        if (data.recommendations) {
+          setChatRecommendations(data.recommendations);
+        }
+      } else {
+        setChatMessages(prev => [...prev, { role: "assistant", content: "Sorry, I encountered an error. Please try again." }]);
+      }
+    } catch (e) {
+      setChatMessages(prev => [...prev, { role: "assistant", content: "Sorry, cannot connect to the server right now." }]);
+    } finally {
+      setLoadingChat(false);
+    }
+  }
+
 
   const SectionComp = SECTION_COMPS[current];
 
@@ -1013,44 +1142,316 @@ export default function App() {
       {/* ══ BODY ═══════════════════════════════════════ */}
       <main style={{ maxWidth:960, margin:"0 auto", padding:"28px 24px 80px" }}>
         {submitted ? (
-          <div style={{
-            textAlign:"center",
-            padding:"48px 32px",
-            background:C.bgCard,
-            border:`1px solid ${C.border}`,
-            borderRadius:16,
-            boxShadow:"0 12px 40px rgba(0,0,0,0.4)",
-            maxWidth: 600,
-            margin: "40px auto 0"
-          }}>
-            <div style={{ fontSize:64, marginBottom:20 }}>🎉</div>
-            <h2 style={{ color:C.green, fontSize:26, fontWeight:800, margin:"0 0 12px" }}>
-              {lang === "en" ? "Survey submitted successfully." : "సర్వే విజయవంతంగా సమర్పించబడింది."}
-            </h2>
-            <p style={{ color:C.textMuted, fontSize:15, margin:"0 0 32px", lineHeight:1.6 }}>
-              {lang === "en" ? "Thank you. Your response has been recorded successfully." : "ధన్యవాదాలు. మీ ప్రతిస్పందన విజయవంతంగా నమోదైంది."}
-            </p>
-            <button
-              onClick={() => {
-                setFormData(INIT);
-                setVisited(new Set(["A"]));
-                setCurrent("A");
-                setSubmitted(false);
-                setShowErrors(false);
-                setTouched({});
-              }}
-              style={{
-                padding:"12px 36px", borderRadius:10, border:"none",
-                background:`linear-gradient(135deg, ${C.accent} 0%, #f59e0b 100%)`,
-                color:C.bg, cursor:"pointer", fontWeight:800, fontSize:14,
-                fontFamily:"inherit", boxShadow:"0 4px 16px rgba(251,191,36,0.25)",
-                transition:"all 0.2s"
-              }}
-              onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"}
-              onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}
-            >
-              {lang === "en" ? "Submit Another Survey" : "మరొక సర్వేని సమర్పించండి"}
-            </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {/* Dashboard Header */}
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "16px 24px",
+              background: C.bgCard,
+              border: `1px solid ${C.border}`,
+              borderRadius: 12,
+              flexWrap: "wrap",
+              gap: 16
+            }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.accent }}>
+                  📊 {lang === "en" ? "Welfare Eligibility & Benefits Dashboard" : "సంక్షేమ అర్హత & ప్రయోజనాల డాష్‌బోర్డ్"}
+                </h2>
+                <p style={{ margin: "4px 0 0 0", fontSize: 13, color: C.textMuted }}>
+                  {lang === "en" ? `Profile: ${formData.firstName || ""} ${formData.lastName || ""} · ${formData.gender ? formData.gender.toUpperCase() : ""} · Age ${formData.age || ""}` : `ప్రొఫైల్: ${formData.firstName || ""} ${formData.lastName || ""} · ${formData.gender || ""} · వయస్సు ${formData.age || ""}`}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setFormData(INIT);
+                  setVisited(new Set(["A"]));
+                  setCurrent("A");
+                  setSubmitted(false);
+                  setShowErrors(false);
+                  setTouched({});
+                  setChatMessages([]);
+                  setChatRecommendations([]);
+                }}
+                style={{
+                  padding: "10px 20px", borderRadius: 8, border: `1px solid ${C.border}`,
+                  background: `linear-gradient(135deg, ${C.bgInput} 0%, rgba(251,191,36,0.05) 100%)`,
+                  color: C.accent, cursor: "pointer", fontWeight: 700, fontSize: 13,
+                  fontFamily: "inherit", transition: "all 0.2s"
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = C.accent;
+                  e.currentTarget.style.background = C.accentDim;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = C.border;
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${C.bgInput} 0%, rgba(251,191,36,0.05) 100%)`;
+                }}
+              >
+                🔄 {lang === "en" ? "Submit Another Survey" : "మరొక సర్వేని సమర్పించండి"}
+              </button>
+            </div>
+
+            {/* Split Dashboard Content */}
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+              {/* Left Column: Recommendations (40% width on desktop) */}
+              <div style={{
+                flex: "1 1 350px",
+                maxHeight: "calc(100vh - 200px)",
+                overflowY: "auto",
+                background: C.bgCard,
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                padding: 20,
+                display: "flex",
+                flexDirection: "column",
+                gap: 16
+              }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
+                  📋 {lang === "en" ? "Scheme Recommendations" : "పథకం సిఫార్సులు"}
+                </h3>
+                {chatRecommendations.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "40px 20px", color: C.textMuted }}>
+                    <div style={{ fontSize: 32, marginBottom: 12, display: "inline-block", animation: "spin 2s linear infinite" }}>🔄</div>
+                    <div>{lang === "en" ? "Evaluating eligible welfare schemes..." : "అర్హతగల సంక్షేమ పథకాలను అంచనా వేస్తోంది..."}</div>
+                  </div>
+                ) : (
+                  chatRecommendations.map((rec, idx) => {
+                    const isEligible = rec.eligibility_status === "ELIGIBLE";
+                    const isPartial = rec.eligibility_status === "PARTIALLY_ELIGIBLE";
+                    const badgeBg = isEligible ? C.greenDim : isPartial ? C.accentDim : "rgba(248, 113, 113, 0.08)";
+                    const badgeBorder = isEligible ? C.green : isPartial ? C.accent : C.red;
+                    const badgeText = isEligible ? C.green : isPartial ? C.accent : C.red;
+
+                    return (
+                      <div key={idx} style={{
+                        padding: 16,
+                        background: C.bgInput,
+                        border: `1px solid ${badgeBorder}`,
+                        borderRadius: 10,
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.2)"
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
+                          <h4 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: C.white }}>
+                            {rec.scheme_name}
+                          </h4>
+                          <span style={{
+                            padding: "3px 8px",
+                            borderRadius: 12,
+                            fontSize: 10,
+                            fontWeight: 800,
+                            background: badgeBg,
+                            border: `1px solid ${badgeBorder}`,
+                            color: badgeText,
+                            whiteSpace: "nowrap"
+                          }}>
+                            {rec.eligibility_status}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 10 }}>
+                          Match Score: <strong style={{ color: C.accent }}>{rec.eligibility_score}%</strong> · Page {rec.source_page} · {rec.verification_status}
+                        </div>
+                        <p style={{ margin: "0 0 10px 0", fontSize: 12, color: C.text, lineHeight: 1.4 }}>
+                          <strong>Why Matched:</strong> {rec.why_recommended}
+                        </p>
+                        
+                        {/* Required vs Missing Documents checklist */}
+                        {rec.required_documents && (
+                          <div style={{ marginTop: 8, padding: 8, background: "rgba(0,0,0,0.15)", borderRadius: 6 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: C.textLabel, marginBottom: 4 }}>
+                              Document Status
+                            </div>
+                            {/* Missing documents */}
+                            {rec.missing_documents && rec.missing_documents.length > 0 ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                {rec.missing_documents.map((doc, dIdx) => (
+                                  <div key={dIdx} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: C.red }}>
+                                    ⚠️ <span style={{ textDecoration: "line-through" }}>{doc}</span> (Missing)
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 11, color: C.green }}>
+                                ✓ All required documents available
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {rec.next_steps && (
+                          <div style={{ marginTop: 8, fontSize: 11, color: C.textLabel, borderTop: `1px solid rgba(255,255,255,0.05)`, paddingTop: 8 }}>
+                            <strong>Action Plan:</strong> {rec.next_steps}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Right Column: Chat Interface (60% width on desktop) */}
+              <div style={{
+                flex: "2 1 500px",
+                background: C.bgCard,
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                padding: 20,
+                display: "flex",
+                flexDirection: "column",
+                height: "calc(100vh - 200px)",
+                justifyContent: "space-between"
+              }}>
+                {/* Chat Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${C.border}`, paddingBottom: 10, marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: C.green, animation: "pulse 1.5s infinite" }} />
+                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>
+                      🤖 {lang === "en" ? "Saarthi Welfare Assistant" : "సారథి సంక్షేమ సహాయకుడు"}
+                    </h3>
+                  </div>
+                  <span style={{ fontSize: 11, color: C.textMuted }}>Powered by Welfare Intelligence RAG</span>
+                </div>
+
+                {/* Messages Viewport */}
+                <div style={{
+                  flex: 1,
+                  overflowY: "auto",
+                  paddingRight: 8,
+                  marginBottom: 16,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12
+                }}>
+                  {chatMessages.map((msg, idx) => {
+                    const isUser = msg.role === "user";
+                    return (
+                      <div key={idx} style={{
+                        display: "flex",
+                        justifyContent: isUser ? "flex-end" : "flex-start",
+                        width: "100%"
+                      }}>
+                        <div style={{
+                          maxWidth: "85%",
+                          padding: "12px 16px",
+                          borderRadius: 12,
+                          background: isUser ? C.accent : C.bgInput,
+                          color: isUser ? C.bg : C.text,
+                          border: isUser ? "none" : `1px solid ${C.border}`,
+                          boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                          fontSize: 13
+                        }}>
+                          {isUser ? (
+                            <p style={{ margin: 0, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{msg.content}</p>
+                          ) : (
+                            renderMarkdown(msg.content)
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {loadingChat && (
+                    <div style={{ display: "flex", justifyContent: "flex-start", width: "100%" }}>
+                      <div style={{
+                        padding: "12px 16px",
+                        borderRadius: 12,
+                        background: C.bgInput,
+                        border: `1px solid ${C.border}`,
+                        color: C.textMuted,
+                        display: "flex",
+                        gap: 4,
+                        alignItems: "center"
+                      }}>
+                        <span style={{ fontSize: 12 }}>🤖 Assistant is typing</span>
+                        <span className="dot-pulse-animation" />
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Chat Footer with Chips and Input */}
+                <div>
+                  {/* Quick action chips */}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                    {[
+                      lang === "en" ? "Explain my document gaps" : "నా పత్రాల లోపాలను వివరించండి",
+                      lang === "en" ? "Show all eligible Telangana schemes" : "అర్హతగల తెలంగాణ పథకాలు చూపించండి",
+                      lang === "en" ? "Rules for Aasara Pension" : "ఆసరా పింఛను నిబంధనలు",
+                      lang === "en" ? "How to apply for Ujjwala Yojana?" : "ఉజ్వల యోజన కోసం ఎలా దరఖాస్తు చేయాలి?"
+                    ].map((chipText, cIdx) => (
+                      <button
+                        key={cIdx}
+                        onClick={() => handleSendChatMessage(chipText)}
+                        disabled={loadingChat}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 16,
+                          border: `1px solid ${C.border}`,
+                          background: "transparent",
+                          color: C.accent,
+                          cursor: "pointer",
+                          fontSize: 11,
+                          fontFamily: "inherit",
+                          transition: "all 0.15s"
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.borderColor = C.accent;
+                          e.currentTarget.style.background = C.accentDim;
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.borderColor = C.border;
+                          e.currentTarget.style.background = "transparent";
+                        }}
+                      >
+                        {chipText}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Input Form */}
+                  <form onSubmit={e => { e.preventDefault(); handleSendChatMessage(); }} style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      placeholder={lang === "en" ? "Ask about rules, required documents, or application steps..." : "నిబంధనలు, అవసరమైన పత్రాలు లేదా దరఖాస్తు దశల గురించి అడగండి..."}
+                      disabled={loadingChat}
+                      style={{
+                        flex: 1,
+                        background: C.bgInput,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 8,
+                        padding: "10px 14px",
+                        color: C.text,
+                        fontSize: 13,
+                        outline: "none",
+                        fontFamily: "inherit"
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={loadingChat || !chatInput.trim()}
+                      style={{
+                        padding: "10px 20px",
+                        borderRadius: 8,
+                        border: "none",
+                        background: `linear-gradient(135deg, ${C.accent}, #f59e0b)`,
+                        color: C.bg,
+                        cursor: "pointer",
+                        fontWeight: 800,
+                        fontSize: 13,
+                        fontFamily: "inherit",
+                        opacity: (loadingChat || !chatInput.trim()) ? 0.6 : 1,
+                        transition: "all 0.2s"
+                      }}
+                    >
+                      {lang === "en" ? "Send" : "పంపు"}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           <>
