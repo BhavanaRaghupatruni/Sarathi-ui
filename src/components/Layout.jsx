@@ -20,16 +20,23 @@ export default function Layout() {
 
     if (role === "ADMIN") {
       links.push({ path: "/admin", label: "⚙️ Admin Hub" });
+      links.push({ path: "/registry", label: "📇 CRM Registry" });
+      links.push({ path: "/operations", label: "⚙️ Operations" });
       links.push({ path: "/cases", label: "📁 Cases" });
       links.push({ path: "/volunteers", label: "🤝 Field Ops" });
       links.push({ path: "/citizens", label: "👤 Citizen View" });
       links.push({ path: "/survey", label: "📝 Survey Wizard" });
     } else if (role === "CENTRAL_HUB") {
+      links.push({ path: "/registry", label: "📇 CRM Registry" });
+      links.push({ path: "/operations", label: "⚙️ Operations" });
       links.push({ path: "/cases", label: "📁 Hub Cases" });
       links.push({ path: "/volunteers", label: "🤝 Field Ops" });
     } else if (role === "LOCAL_HUB") {
+      links.push({ path: "/registry", label: "📇 CRM Registry" });
+      links.push({ path: "/operations", label: "⚙️ Operations" });
       links.push({ path: "/cases", label: "📁 Local Cases" });
     } else if (role === "VOLUNTEER") {
+      links.push({ path: "/registry", label: "📇 CRM Registry" });
       links.push({ path: "/volunteers", label: "🤝 Volunteer Hub" });
       links.push({ path: "/survey", label: "📝 Survey Wizard" });
     } else if (role === "CITIZEN") {

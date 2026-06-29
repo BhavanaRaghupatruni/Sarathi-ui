@@ -10,6 +10,8 @@ import VolunteerDashboard from "./pages/VolunteerDashboard";
 import CitizenDashboard from "./pages/CitizenDashboard";
 import CasesDashboard from "./pages/CasesDashboard";
 import SurveyWizard from "./pages/SurveyWizard";
+import RegistryDashboard from "./pages/RegistryDashboard";
+import OperationsDashboard from "./pages/OperationsDashboard";
 
 // Re-export validateSection to ensure backwards compatibility with existing App tests
 export { validateSection } from "./pages/SurveyWizard";
@@ -56,6 +58,8 @@ export default function App() {
           {/* Protected Routes nested inside Layout shell */}
           <Route element={<Layout />}>
             <Route path="/admin" element={<ProtectedRoute allowedRoles={["ADMIN"]}><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/registry" element={<ProtectedRoute allowedRoles={["ADMIN", "CENTRAL_HUB", "LOCAL_HUB", "VOLUNTEER"]}><RegistryDashboard /></ProtectedRoute>} />
+            <Route path="/operations" element={<ProtectedRoute allowedRoles={["ADMIN", "CENTRAL_HUB", "LOCAL_HUB"]}><OperationsDashboard /></ProtectedRoute>} />
             <Route path="/volunteers" element={<ProtectedRoute allowedRoles={["VOLUNTEER", "CENTRAL_HUB", "ADMIN"]}><VolunteerDashboard /></ProtectedRoute>} />
             <Route path="/citizens" element={<ProtectedRoute allowedRoles={["CITIZEN", "ADMIN"]}><CitizenDashboard /></ProtectedRoute>} />
             <Route path="/cases" element={<ProtectedRoute allowedRoles={["CENTRAL_HUB", "LOCAL_HUB", "ADMIN"]}><CasesDashboard /></ProtectedRoute>} />

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { C } from "../theme";
+import { crmService } from "../services/crmService";
 import SectionA from "../sections/SectionA";
 import SectionB from "../sections/SectionB";
 import SectionC from "../sections/SectionC";
@@ -737,6 +738,9 @@ export default function SurveyWizard() {
 
     currentCases.push(newCase);
     localStorage.setItem("sarathi_cases_db", JSON.stringify(currentCases));
+
+    // Sync survey submission to CRM registry database
+    crmService.syncSurveyToCRM(payload, user?.name || "Srinivas Raju (Volunteer)");
 
     // If logged in as CITIZEN, save under their active discover survey
     if (user && user.role === "CITIZEN") {
